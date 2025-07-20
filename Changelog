@@ -1,0 +1,6 @@
+version 1.0.1
+ - Prohibit any instance methods, even if there are unrecognized annotations.
+ - Multiple identical backup methods are not allowed.
+ - In addition to disable the logging function, it now supports replacing the logging function.
+version 1.0.0:
+ - Initial version.
