@@ -2,7 +2,6 @@ package qing.albatross.demo;
 
 import android.os.Build;
 import android.os.Debug;
-import android.util.Log;
 
 import java.io.PrintStream;
 import java.lang.reflect.Constructor;
@@ -124,13 +123,13 @@ public class TestMain {
   public static void testAField(int i) {
     TestMainH.i = i + 1;
     if (TestMain.i != i + 1) {
-      Log.d("QING", "TestMainH i:" + TestMainH.i + " d:" + TestMainH.d + " expect:" + (i + 1));
-      Log.d("QING", "TestMain i:" + TestMain.i + " d:" + TestMain.d + " expect:" + (i + 1));
+      Albatross.log( "TestMainH i:" + TestMainH.i + " d:" + TestMainH.d + " expect:" + (i + 1));
+      Albatross.log( "TestMain i:" + TestMain.i + " d:" + TestMain.d + " expect:" + (i + 1));
       assert TestMain.i == i + 1;
     }
     TestMain.i = i;
     if (TestMainH.i != i) {
-      Log.d("QING", "i:" + TestMainH.i + " d:" + TestMainH.d + " expect:" + (i));
+      Albatross.log( "i:" + TestMainH.i + " d:" + TestMainH.d + " expect:" + (i));
       assert TestMainH.i == i;
     }
   }
@@ -187,7 +186,7 @@ public class TestMain {
       B3H b3h = cast(b3);
       int b3h_backup_v = b3h.i;
       if (b3h_backup_v != 2) {
-        Log.d("QING", "b3h_backup_v:" + b3h_backup_v);
+        Albatross.log( "b3h_backup_v:" + b3h_backup_v);
         assert b3h_backup_v == 2;
       }
       staticFieldTest2(hook);
@@ -227,7 +226,7 @@ public class TestMain {
 //    assert Albatross.hookClass(Activity.class) == 0;
 //    assert Albatross.hookClass(Activity.class) == Albatross.CLASS_ALREADY_HOOK;
     Method testConstructorHook = TestMain.class.getDeclaredMethod("testConstructorHook");
-    Log.d("QING", "compile testConstructorHook:" + Albatross.entryPointFromQuickCompiledCode(testConstructorHook)
+    Albatross.log( "compile testConstructorHook:" + Albatross.entryPointFromQuickCompiledCode(testConstructorHook)
         + " target:" + Albatross.entryPointFromQuickCompiledCode(TestMain.class.getDeclaredConstructor(int.class, int.class)));
 //    Albatross.decompileMethod(TestMain.class.getDeclaredMethod("testConstructorHook"), true);
     testConstructorHook();
@@ -239,7 +238,7 @@ public class TestMain {
       Method testAField = TestMain.class.getDeclaredMethod("testAField", int.class);
       if (hook) {
         if (Albatross.isCompiled(testAField)) {
-          Log.d("QING", "testAField is compiled,decompiled it");
+          Albatross.log( "testAField is compiled,decompiled it");
           Albatross.decompileMethod(testAField, false);
         }
         Albatross.compileMethod(testAField);

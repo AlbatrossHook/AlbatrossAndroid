@@ -14,10 +14,6 @@ import qing.albatross.core.Albatross;
 @TargetClass(URL.class)
 public class URLH {
 
-  private static URLConnection handleConnection(URLConnection connection, String contextId) {
-    connection.setRequestProperty("Qing", contextId + "->" + "URLConnection");
-    return connection;
-  }
 
   static String getExceptionDesc(Exception e) {
     Albatross.log(e.toString(), e);

@@ -14,10 +14,10 @@ public class DemoMain {
     try {
       Method main = TestMain.class.getDeclaredMethod("main", boolean.class);
       if (Albatross.isCompiled(main)) {
-        Log.d("QING", "TestMain  is compiled");
+        Albatross.log( "TestMain  is compiled");
         Albatross.decompileMethod(main, true);
       } else {
-        Log.d("QING", "TestMain  is not compiled");
+        Albatross.log( "TestMain  is not compiled");
       }
       if (hook) {
         TestMain a = new TestMain(1, 1);

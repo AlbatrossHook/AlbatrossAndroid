@@ -83,7 +83,7 @@ public class TargetHookTest {
     private String string(@ParamInfo("java.lang.String") Object s) throws NoSuchMethodException {
       if (stringCallCount++ > 16) {
         long entry = Albatross.entryPointFromQuickCompiledCode(CH.class.getDeclaredMethod("string", Object.class));
-        Log.d("QING", "string can not call target method:" + entry);
+        Albatross.log( "string can not call target method:" + entry);
       } else if (stringCallCount++ > 18) {
         long entry = Albatross.entryPointFromQuickCompiledCode(C.class.getDeclaredMethod("string", String.class));
         throw new RuntimeException("string can not call target method:" + entry);

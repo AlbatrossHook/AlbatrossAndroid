@@ -76,6 +76,7 @@ import qing.albatross.exception.RedundantFieldErr;
 import qing.albatross.exception.RedundantMethodErr;
 import qing.albatross.exception.MethodExceptionReason;
 import qing.albatross.exception.HookerStructErr;
+import qing.albatross.exception.RepetitiveBackupErr;
 import qing.albatross.exception.RequiredClassErr;
 import qing.albatross.exception.RequiredFieldErr;
 import qing.albatross.exception.RequiredMethodErr;
@@ -594,8 +595,16 @@ public final class Albatross {
               disableFieldBackup();
               default_compile_option_target = COMPILE_OPTIMIZED;
             } else {
-              default_compile_option_hooker = COMPILE_OPTIMIZED;
-              default_compile_option_target = COMPILE_OPTIMIZED;
+              if (sdkInt <= 28) {
+                default_compile_option_hooker = COMPILE_OPTIMIZED;
+                default_compile_option_target = COMPILE_OPTIMIZED;
+              } else if (sdkInt == 29) {
+                default_compile_option_hooker = COMPILE_OPTIMIZED;
+                default_compile_option_target = COMPILE_DISABLE_JIT;
+              } else {
+                default_compile_option_hooker = COMPILE_OPTIMIZED;
+                default_compile_option_target = COMPILE_OPTIMIZED;
+              }
               if ((initResult & 2) == 2)
                 default_compile_option_hooker_backup = COMPILE_DECOMPILE | COMPILE_OPTIMIZED;
             }
@@ -629,7 +638,7 @@ public final class Albatross {
 
   private static void initClassLoader() throws AlbatrossException {
     syncClassLoader();
-    Albatross.__hookClass(ClassLoaderHook.class, null, ClassLoader.class);
+    Albatross.__hookClass(ClassLoaderHook.class, ClassLoader.class.getClassLoader(), ClassLoader.class);
   }
 
   public static void log(String msg) {
@@ -653,8 +662,15 @@ public final class Albatross {
         hookMethod.compile_target = compile_target;
       else
         hookMethod.compile_target = COMPILE_DEFAULT;
-    } else if (compile_target != CLASS_ALREADY_HOOK)
-      hookMethod.compile_target = compile_target;
+    } else {
+      if (isBackup) {
+        if (hookMethod.backup != null)
+          throw new RepetitiveBackupErr(hook);
+        hookMethod.backup = hook;
+      }
+      if (compile_target != CLASS_ALREADY_HOOK)
+        hookMethod.compile_target = compile_target;
+    }
     hookMethod.hook = hook;
     hookMethod.compile_hooker = compile_hooker;
     return hookMethod;
@@ -671,7 +687,7 @@ public final class Albatross {
       hookRecord.put(target, hookMethod);
     }
     if (hookMethod.backup != null)
-      throw new RuntimeException("duplicated backup method:" + hookMethod.backup);
+      throw new RepetitiveBackupErr(hookMethod.backup);
     hookMethod.backup = backup;
     hookMethod.compile_target = compile_target;
     return hookMethod;
@@ -721,6 +737,19 @@ public final class Albatross {
       }
     }
   }
+
+  public synchronized static void resetLogger(Method infoLogger, Method errLogger) {
+    transactionBegin();
+    try {
+      backupAndHook(Albatross.class.getDeclaredMethod("log", String.class), infoLogger, null);
+      backupAndHook(Albatross.class.getDeclaredMethod("log", String.class, Throwable.class), errLogger, null);
+      transactionEnd(true);
+    } catch (Exception e) {
+      transactionEnd(false);
+      Albatross.log("resetLogger", e);
+    }
+  }
+
 
   public static boolean disableMethod(Method method) {
     return disableMethod(method, false);
@@ -1137,7 +1166,8 @@ public final class Albatross {
         if ((methodBackup = m.getAnnotation(MethodBackup.class)) != null) {
           needBackup = true;
           target_compile = methodBackup.compileTarget();
-        }
+        } else
+          needBackup = false;
         aliases = methodHook.name();
         className = methodHook.className();
         hookWay = 1;
@@ -1151,7 +1181,8 @@ public final class Albatross {
         if ((staticMethodBackup = m.getAnnotation(StaticMethodBackup.class)) != null) {
           target_compile = staticMethodBackup.compileTarget();
           needBackup = true;
-        }
+        } else
+          needBackup = false;
         className = staticMethodHook.className();
         aliases = staticMethodHook.name();
         hookWay = 1;
@@ -1178,7 +1209,8 @@ public final class Albatross {
         if ((constructorBackup = m.getAnnotation(ConstructorBackup.class)) != null) {
           target_compile = constructorBackup.compileTarget();
           needBackup = true;
-        }
+        } else
+          needBackup = false;
         className = constructorHook.className();
         methodRequired = constructorHook.required();
         methodOption = constructorHook.option();
@@ -1223,6 +1255,8 @@ public final class Albatross {
         methodRequired = constructorBackup.required();
         methodOption = constructorBackup.option();
       } else {
+        if (!Modifier.isStatic(m.getModifiers()))
+          throw new RedundantMethodErr(m);
         continue;
       }
       Class<?>[] mParameterTypes = m.getParameterTypes();
@@ -1232,7 +1266,7 @@ public final class Albatross {
         try {
           targetClass = getTargetClass(defaultClass, className, targetStatic ? null : (isHookStatic ? mParameterTypes[0] : null), loader);
         } catch (ClassNotFoundException e) {
-          log("Cannot find target class for " + m, e);
+          log("Cannot find target class for " + m + ":" + e);
           if (methodRequired) {
             throw new RequiredMethodErr("required method target class is not find", annotations[0]);
           }
@@ -1254,7 +1288,7 @@ public final class Albatross {
         if (methodRequired) {
           throw new RequiredMethodErr("required method argument class is not find:" + e.getMessage(), annotations[0]);
         }
-        log("Cannot find target method argument for " + m, e);
+        log("Cannot find target method argument for " + m);
         continue;
       } catch (FindMethodException e) {
         if (hookWay == 1 || hookWay == 3) {
@@ -1339,6 +1373,8 @@ public final class Albatross {
               } else {
                 checkMethodReturn(dependencies, targetMethod, m);
               }
+            } catch (AlbatrossErr e) {
+              throw e;
             } catch (Exception e) {
               log("Wrong target method for " + m, e);
               if (methodRequired) {
@@ -1359,7 +1395,7 @@ public final class Albatross {
             try {
               targetConstructor = targetClass.getDeclaredConstructor(argTypes);
             } catch (NoSuchMethodException e) {
-              log("Cannot find target constructor for " + m, e);
+              log("Cannot find target constructor for " + m);
               if (methodRequired) {
                 throw new RequiredMethodErr("Cannot find target constructor for " + m, annotations[0]);
               }
@@ -1377,6 +1413,8 @@ public final class Albatross {
               } else {
                 checkMethodReturn(dependencies, targetConstructor, m);
               }
+            } catch (AlbatrossErr e) {
+              throw e;
             } catch (Exception e) {
               log("Wrong target constructor for " + m, e);
               if (methodRequired) {
@@ -1444,9 +1482,12 @@ public final class Albatross {
             }
           }
           success_count += 1;
-          if (hook != null)
-            log("Hooked " + target + ": hook=" + hook + (backup == null ? "" : ", backup=" + backup));
-          else
+          if (hook != null) {
+            if (hook == backup)
+              log("Hooked " + target + ": hookBackup=" + hook);
+            else
+              log("Hooked " + target + ": hook=" + hook + (backup == null ? "" : ", backup=" + backup));
+          } else
             log("Backup " + target + ": backup=" + backup);
         }
       } catch (AlbatrossErr e) {

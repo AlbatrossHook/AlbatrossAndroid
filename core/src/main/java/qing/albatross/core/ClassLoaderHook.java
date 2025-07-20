@@ -60,7 +60,7 @@ public class ClassLoaderHook {
     Albatross.appendLoader(loader);
   }
 
-  //avoid inline other constructor
+  //aot code may inline other constructor,so hook this constructor also.
   @ConstructorHookBackup
   private static void init(ClassLoader loader, ClassLoader parent) {
     init(loader, parent);
