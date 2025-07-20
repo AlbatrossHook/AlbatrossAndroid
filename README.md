@@ -66,6 +66,25 @@ Albatross adheres to the following design goals:
 | Pending Hooking | Not support(lazy initialization is not) | Trigger once target class is initialization |
 ---
 
+## Project Structure
+
+###  `annotation`
+This module  contains annotations used throughout the project. Annotations can be used to provide metadata about classes, methods, or fields, which can be processed at runtime.
+
+### `core`
+The core module provides the fundamental functionality of the Albatross Android framework. It contains the `Albatross` class, which offers various hooking - related methods such as method hooking, backup, and field backup.
+
+### `server` 
+This module is  responsible for rpc call.
+
+###  `demo` 
+The demo module is used to demonstrate the functionality of the Albatross Android framework. It contains Java source files for testing hooking functions.Please note, test by continuously clicking the "load" button.
+
+### `app` 
+Android application for Albatross test.
+
+### `app32` 
+ Similar to the `app` module, but specifically configured for 32 - bit Android applications.
 
 ## Usage Example
 ### 1. hook activity method and access field.
