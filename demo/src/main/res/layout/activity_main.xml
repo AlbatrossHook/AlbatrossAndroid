@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+<ScrollView
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="3"
+    >
+    <GridLayout
+        android:columnCount="4"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <Button
+            android:onClick="debug"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="debug" />
+
+        <Button
+            android:onClick="crash"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="crash" />
+
+        <Button
+            android:onClick="gcTest"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="gc" />
+
+        <Button
+            android:onClick="loadDex"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="dex" />
+        <Button
+            android:onClick="compile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="compile" />
+
+        <Button
+            android:onClick="init"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="init" />
+
+
+        <Button
+            android:onClick="server"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="server" />
+        <Button
+            android:onClick="broadcast"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="broadcast" />
+
+        <Button
+            android:onClick="broadcastLong"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="broadcastLong" />
+
+
+    </GridLayout>
+
+
+</ScrollView>
+
+
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="hello world" />
+
+</LinearLayout>
