@@ -82,70 +82,6 @@ extern usize C_INNER(page_size);
 #define PAGE_OFFSET(x) ((x) & (PAGE_SIZE-1))
 
 
-#define I5_MASK  0x0000001fU
-#define I6_MASK  0x0000003fU
-#define I8_MASK  0x000000ffU
-#define I10_MASK 0x000003ffU
-#define I11_MASK 0x000007ffU
-#define I12_MASK 0x00000fffU
-#define I32_MAX  ((i32)  0x7fffffff)
-#define I32_MIN  ((i32) (-I32_MAX - 1))
-#define I64_MAX  ((i64)  0x7fffffffffffffffULL)
-#define I64_MIN  ((i64) (-I64_MAX - 1))
-#define U32_MAX  ((u32) 0xffffffff)
-#define U8_MAX  ((u8) 0xff)
-#define U16_MAX  (0xffff)
-#define USIZE_MAX ((usize)(-1))
-#define IS_WITHIN_INT32_RANGE(i) \
-    (((i64) (i)) >= (i64) I32_MIN && \
-     ((i64) (i)) <= (i64) I32_MAX)
-#define IS_WITHIN_I8_RANGE(i) \
-    (((i64) (i)) >=  (-128) && \
-     ((i64) (i)) <=  (127))
-
-#define IS_WITHIN_I11_RANGE(i) \
-    (((i64) (i)) >=  (-1024L) && \
-     ((i64) (i)) <=  (1023L))
-
-#define IS_WITHIN_I20_RANGE(i) \
-    (((i64) (i)) >=  (-524288L) && \
-     ((i64) (i)) <=  (524287L))
-
-#define IS_WITHIN_I26_RANGE(i) \
-    (((i64) (i)) >=  (-33554432L) && \
-     ((i64) (i)) <=  (33554431L))
-
-#define IS_WITHIN_U7_RANGE(i) \
-    (((i64) (i)) >=  (0L) && \
-     ((i64) (i)) <=  (127L))
-
-#define IS_WITHIN_U8_RANGE(i) \
-    (((i64) (i)) >=  (0L) && \
-     ((i64) (i)) <=  (255L))
-
-#define U32_TO_LE(val)  ((u32) (val))
-#define I32_TO_LE(val)  ((i32) (val))
-#define U64_TO_LE(val)  ((u64) (val))
-#define INT32_TO_LE(val)  ((i32) (val))
-#define I64_TO_LE(val)  ((i64) (val))
-#define U32_FROM_LE(val)  ((u32) (val))
-#define U64_FROM_LE(val)  ((u64) (val))
-#define I32_FROM_LE(val)  ((i32) (val))
-#define I64_FROM_LE(val)  ((i64) (val))
-
-#define PTR_TO_SIZE(p)  ((usize) (p))
-#define SIZE_TO_PTR(v) ((void*)(v))
-
-#define array_size(arr)    (sizeof (arr) / sizeof ((arr)[0]))
-#define RWX_SUPPORT 1
-
-#define ALIGN_DOWN(s, b) \
-    ((((usize) (s))) & ~((usize) (b - 1)))
-#define ALIGN(s, b) \
-    ((((usize) (s)+(b-1))) & ~((usize) (b - 1)))
-#undef  ABS
-#define ABS(a)     (((a) < 0) ? -(a) : (a))
-
 #ifndef MIN
 #define MIN(x, y) ({ \
     typeof(x) _x = (x); \
@@ -153,11 +89,6 @@ extern usize C_INNER(page_size);
     (void) (&_x == &_y);        \
     _x < _y ? _x : _y; })
 
-#define MAX(x, y) ({ \
-    typeof(x) _x = (x); \
-    typeof(y) _y = (y); \
-    (void) (&_x == &_y);        \
-    _x < _y ? _y : _x; })
 #endif
 
 #ifdef __cplusplus
@@ -168,6 +99,4 @@ extern usize C_INNER(page_size);
 #define BEGIN_C_FUNC
 #define END_C_FUNC
 #endif
-#define alb_strip_code_pointer(n) n
-#define alb_sign_code_pointer(n) n
 #endif //ALBATROSS_HOOK_BASE_TYPES_H

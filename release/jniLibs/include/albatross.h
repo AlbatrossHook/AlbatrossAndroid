@@ -66,14 +66,6 @@ API void AlbatrossDestroy();
 
 API int AlbatrossAndroidInit(void *env/*JNIEnv*/, void *Albatross/*jclass*/);
 
-API  int android_init_native(void *env, void *art_handler, int method_count);
-
-API int
-android_load_dex(const char *dex_path, const char *lib_path, const char *register_class, const char *class_name,
-    int flags, const char *loaderSymbolName);
-
-API void *get_current_jniEnv();
-
 
 typedef enum {
   ALB_CPU_INVALID = 0,
