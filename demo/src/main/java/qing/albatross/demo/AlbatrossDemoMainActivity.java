@@ -249,7 +249,7 @@ public class AlbatrossDemoMainActivity extends Activity {
 
 
   public void onResume() {
-    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis());
+    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis()+",testing by continuously clicking the \"load\" button");
     super.onResume();
   }
 

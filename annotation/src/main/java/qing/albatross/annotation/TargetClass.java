@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 package qing.albatross.annotation;
 
 import static qing.albatross.annotation.CompileOption.COMPILE_DEFAULT;

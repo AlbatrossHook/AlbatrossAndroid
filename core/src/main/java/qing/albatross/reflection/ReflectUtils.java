@@ -38,6 +38,7 @@ public class ReflectUtils {
         return method;
       } catch (NoSuchMethodException e) {
         clazz = clazz.getSuperclass();
+        Albatross.addToVisit(clazz);
       }
     }
     throw new NoSuchMethodException("Method " + name + " with parameters " + Arrays.asList(parameterTypes) + " not found in " + clazz);
@@ -84,6 +85,7 @@ public class ReflectUtils {
       if (method != null)
         return method;
       clazz = clazz.getSuperclass();
+      Albatross.addToVisit(clazz);
     }
     return null;
   }
@@ -156,10 +158,46 @@ public class ReflectUtils {
         return field;
       } catch (NoSuchFieldException e) {
         clazz = clazz.getSuperclass();
+        Albatross.addToVisit(clazz);
       }
     }
     throw new NoSuchFieldException("Field " + name + " not found");
   }
+
+  public static Field findField(Class<?> clazz, String[] names) throws NoSuchFieldException {
+    if (names.length == 0)
+      throw new NoSuchFieldException("Field  not found");
+    while (clazz != null) {
+      try {
+        Field field = findDeclaredField(clazz, names);
+        if (!field.isAccessible()) {
+          field.setAccessible(true);
+        }
+        return field;
+      } catch (NoSuchFieldException e) {
+        clazz = clazz.getSuperclass();
+        Albatross.addToVisit(clazz);
+      }
+    }
+    throw new NoSuchFieldException("Field " + names[0] + " not found");
+  }
+
+  public static Field findDeclaredField(Class<?> clazz, String[] names) throws NoSuchFieldException {
+    if (names.length == 0)
+      throw new NoSuchFieldException("Field not found");
+    for (String name : names) {
+      try {
+        Field field = clazz.getDeclaredField(name);
+        if (!field.isAccessible()) {
+          field.setAccessible(true);
+        }
+        return field;
+      } catch (NoSuchFieldException ignore) {
+      }
+    }
+    throw new NoSuchFieldException("Field " + names[0] + " not found");
+  }
+
 
   public static boolean isInstanceOf(Class<?> cls, Class<?> clazz) {
     do {

@@ -75,7 +75,7 @@ This module  contains annotations used throughout the project. Annotations can b
 The core module provides the fundamental functionality of the Albatross Android framework. It contains the `Albatross` class, which offers various hooking - related methods such as method hooking, backup, and field backup.
 
 ### `server` 
-This module is  responsible for rpc call.
+This module is responsible for rpc call.
 
 ###  `demo` 
 The demo module is used to demonstrate the functionality of the Albatross Android framework. It contains Java source files for testing hooking functions.Please note, test by continuously clicking the "load" button.
@@ -198,7 +198,57 @@ public static void test() throws AlbatrossErr {
     assert targetPackage.equals(record.packageInfo.mPackageName);
   }
 }
+
 ````
+### 4. binder hook
+```java
+@TargetClass
+  static class ParceledListSlice<T> {
+    @FieldRef(option = DefOption.VIRTUAL, required = true)
+    public List<T> mList;
+  }
+
+
+  @TargetClass
+  static class IPackageManager {
+    public static int count = 0;
+
+    @MethodHookBackup
+    private ParceledListSlice<ResolveInfo> queryIntentActivities(Intent intent, String resolvedType, long flags, int userId) {
+
+      ParceledListSlice<ResolveInfo> res = queryIntentActivities(intent, resolvedType, flags, userId);
+      count = res.mList.size();
+      return res;
+    }
+
+    @MethodHookBackup
+    private ParceledListSlice<ResolveInfo> queryIntentActivities(Intent intent, String resolvedType, int flags, int userId) {
+      ParceledListSlice<ResolveInfo> res = queryIntentActivities(intent, resolvedType, flags, userId);
+      count = res.mList.size();
+      return res;
+    }
+  }
+
+
+  public static class PackageManagerH {
+    @FieldRef(option = DefOption.INSTANCE)
+    private IPackageManager mPM;
+  }
+
+  public static void test(boolean hook) throws AlbatrossErr {
+    if (!Albatross.isFieldEnable())
+      return;
+    PackageManager packageManager = Albatross.currentApplication().getPackageManager();
+    if (hook) {
+      Albatross.hookObject(PackageManagerH.class, packageManager);
+    } else
+      IPackageManager.count = -1;
+    Intent resolveIntent = new Intent(Intent.ACTION_MAIN, null);
+    resolveIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+    List<ResolveInfo> res = packageManager.queryIntentActivities(resolveIntent, 0);
+    assert res.size() == IPackageManager.count;
+  }
+```
 
 ##  Future Plans
 Potential features include Java instruction hooking, Java code tracing, dynamic hooking (where a single method can hook methods from multiple classes), call chain hooking, and unhooking capabilities. However, due to resource limitations, the implementation of these features will be prioritized based on user feedback.
@@ -219,7 +269,7 @@ Inspired by the YAHFA framework while introducing architectural improvements for
 ## License
 
 Apache License 2.0
-See [LICENSE](https://github.com/hookzium/hookzium/blob/main/LICENSE) for details.
+See [LICENSE](https://github.com/AlbatrossHook/AlbatrossAndroid/blob/main/LICENSE) for details.
 
 
 ##  Coming Soon

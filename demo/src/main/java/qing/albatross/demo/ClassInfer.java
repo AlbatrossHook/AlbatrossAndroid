@@ -9,7 +9,7 @@ import java.util.Map;
 
 import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.MethodBackup;
-import qing.albatross.annotation.MethodDefOption;
+import qing.albatross.annotation.DefOption;
 import qing.albatross.annotation.StaticMethodBackup;
 import qing.albatross.annotation.StaticMethodHookBackup;
 import qing.albatross.annotation.TargetClass;
@@ -73,7 +73,7 @@ public class ClassInfer {
     public static native Application currentApplication();
 
     //该方法仅仅是为了推导出ActivityClientRecord的正确类型，不会backup Method,所以标记MethodDefOption.NOTHING
-    @MethodBackup(option = MethodDefOption.NOTHING)
+    @MethodBackup(option = DefOption.NOTHING)
     private native Activity performLaunchActivity(ActivityClientRecord r, Intent customIntent);
 
     //泛型的具体类型无法动态获取，所以需要通过上面的方法去推断出类型和依赖

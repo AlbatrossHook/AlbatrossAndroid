@@ -11,22 +11,21 @@ import qing.albatross.core.Albatross;
 
 @TargetClass(value = Handler.class, compileHooker = CompileOption.COMPILE_OPTIMIZED)
 public class HandlerHook {
-  static boolean catchException = true;
 
   @MethodBackup
   public static native void dispatchMessage(Handler handler, Message message);
 
   @MethodHook
-  public static void dispatchMessage$Hook(Handler handler, Message message) {
+  public static void dispatchMessage$Hook(Handler handler, Message message) throws Throwable {
     try {
       dispatchMessage(handler, message);
-    } catch (Exception e) {
-      if (!catchException)
-        throw e;
+    } catch (Throwable e) {
+      Throwable reason = e;
       if (e.getCause() != null)
-        Albatross.log("dispatchMessage",e.getCause());
-      else
-        Albatross.log("dispatchMessage",e);
+        reason = e.getCause();
+      if (reason instanceof AssertionError)
+        throw reason;
+      Albatross.log("dispatchMessage", reason);
     }
   }
 }
