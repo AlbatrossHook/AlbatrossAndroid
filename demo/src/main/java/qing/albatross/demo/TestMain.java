@@ -60,14 +60,13 @@ public class TestMain {
     public int i = 2;
   }
 
+  @TargetClass(B3.class)
   static class B3H {
     static int i_fake = 1111;
+    @FieldRef
     int i = 4;
   }
 
-  static B3H cast(Object o) {
-    return (B3H) o;
-  }
 
   public static int testIntReturn() throws Exception {
     throw new Exception("throw test return");
@@ -139,8 +138,8 @@ public class TestMain {
       System.out.println("debugger isDebuggerConnected");
     }
     Albatross.loadLibrary(null);
-    FieldRefTest.test(hook);
     BinderHook.test(hook);
+    FieldRefTest.test(hook);
     DisableMethodTest.test(hook);
     RequiredTest.test(hook);
     HookerStructErrTest.test(hook);
@@ -185,7 +184,10 @@ public class TestMain {
       staticFieldTest();
       B3 b3 = new B3();
       assert b3.i == 2;
-      B3H b3h = cast(b3);
+      if (hook) {
+        Albatross.hookObject(B3H.class, b3);
+      }
+      B3H b3h = Albatross.convert(b3, B3H.class);
       int b3h_backup_v = b3h.i;
       if (b3h_backup_v != 2) {
         Albatross.log("b3h_backup_v:" + b3h_backup_v);

@@ -30,4 +30,5 @@ public class CompileOption {
   public static final int COMPILE_OPTIMIZED_JIT = COMPILE_OPTIMIZED | COMPILE_DECOMPILE;
   public static final int COMPILE_DISABLE_AOT = 0x20;
   public static final int COMPILE_DISABLE_JIT = 0x40;
+  public static final int COMPILE_AOT = 0x80;
 }

@@ -17,6 +17,7 @@
 package qing.albatross.core;
 
 
+import static qing.albatross.annotation.CompileOption.COMPILE_AOT;
 import static qing.albatross.annotation.CompileOption.COMPILE_DECOMPILE;
 import static qing.albatross.annotation.CompileOption.COMPILE_DEFAULT;
 import static qing.albatross.annotation.CompileOption.COMPILE_NONE;
@@ -449,7 +450,7 @@ public final class Albatross {
   public static native int compileHooker(Class<?> clazz);
 
   public static boolean compileMethod(Member method) {
-    return compileMethod(method, COMPILE_OPTIMIZED);
+    return compileMethod(method, COMPILE_OPTIMIZED | COMPILE_AOT);
   }
 
   public static boolean compileMethod(Member method, int compile) {
@@ -576,15 +577,15 @@ public final class Albatross {
           if (sdkInt > 28 && sdkInt < 35) {
             Class<?> Reflection = Class.forName("sun.reflect.Reflection");
             addToVisit(Reflection);
-            Albatross.backup(Reflection.getDeclaredMethod("getCallerClass"), Albatross.class.getDeclaredMethod("getCallerClass"));
+            Albatross.backup(Reflection.getDeclaredMethod("getCallerClass"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, COMPILE_AOT);
           } else {
             Class<?> VMStack = Class.forName("dalvik.system.VMStack");
             addToVisit(VMStack);
-            Albatross.backup(VMStack.getDeclaredMethod("getStackClass1"), Albatross.class.getDeclaredMethod("getCallerClass"));
+            Albatross.backup(VMStack.getDeclaredMethod("getStackClass1"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, COMPILE_AOT);
           }
           Class<?> ActivityThread = Class.forName("android.app.ActivityThread");
           addToVisit(ActivityThread);
-          Albatross.backup(ActivityThread.getDeclaredMethod("currentApplication"), Albatross.class.getDeclaredMethod("currentApplication"));
+          Albatross.backup(ActivityThread.getDeclaredMethod("currentApplication"), Albatross.class.getDeclaredMethod("currentApplication"), false, false, null, COMPILE_AOT);
           default_compile_option_hooker_backup = COMPILE_DECOMPILE;
           if (Debug.isDebuggerConnected() || containsFlags(FLAG_NO_COMPILE)) {
             albatross_flags |= FLAG_NO_COMPILE;
@@ -594,8 +595,13 @@ public final class Albatross {
             default_compile_option_hooker = COMPILE_NONE;
             default_compile_option_target = COMPILE_NONE;
           } else {
-            default_compile_option_hooker = COMPILE_OPTIMIZED;
-            default_compile_option_target = COMPILE_OPTIMIZED;
+            if ((initResult & 8) != 0) {
+              default_compile_option_hooker = COMPILE_OPTIMIZED | COMPILE_AOT;
+              default_compile_option_target = COMPILE_OPTIMIZED | COMPILE_AOT;
+            } else {
+              default_compile_option_hooker = COMPILE_OPTIMIZED;
+              default_compile_option_target = COMPILE_OPTIMIZED;
+            }
             if (sdkInt <= 25) {
               disableFieldBackup();
             } else {
@@ -606,8 +612,8 @@ public final class Albatross {
           if (!containsFlags(FLAG_NO_COMPILE)) {
             if (compileMethod(Albatross.class.getDeclaredMethod("backup", Member.class, Method.class, boolean.class, boolean.class, Set.class, int.class))) {
               compileMethod(Albatross.class.getDeclaredMethod("backupAndHook", Member.class, Method.class, Method.class, boolean.class, boolean.class, Set.class, int.class, int.class));
-              compileMethod(Albatross.class.getDeclaredMethod("__hookClass", Class.class, ClassLoader.class, Class.class,Object.class));
-              compileMethod(Albatross.class.getDeclaredMethod("backupField", Set.class, Field.class, Field.class,Class.class));
+              compileMethod(Albatross.class.getDeclaredMethod("__hookClass", Class.class, ClassLoader.class, Class.class, Object.class));
+              compileMethod(Albatross.class.getDeclaredMethod("backupField", Set.class, Field.class, Field.class, Class.class));
             }
           }
           if (containsFlags(FLAG_DISABLE_LOG)) {

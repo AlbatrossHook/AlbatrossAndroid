@@ -36,6 +36,8 @@ public class FieldRefTest {
   }
 
   static void test(boolean hook) throws AlbatrossErr {
+    if (!Albatross.isFieldEnable())
+      return;
     if (hook) {
       assert Albatross.hookClass(AH.class, A.class) == 4;
       Albatross.compileClass(FieldRefTest.class, CompileOption.COMPILE_OPTIMIZED_JIT);

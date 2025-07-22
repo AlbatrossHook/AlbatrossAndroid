@@ -1,11 +1,12 @@
 package qing.albatross.demo;
 
 import android.os.Build;
-import android.os.Debug;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
+import qing.albatross.annotation.FieldRef;
+import qing.albatross.annotation.TargetClass;
 import qing.albatross.core.Albatross;
 
 public class FieldTest {
@@ -15,12 +16,10 @@ public class FieldTest {
     public int z = 111111111;
   }
 
+  @TargetClass(B.class)
   static class BH {
+    @FieldRef("i")
     int iback = 4;
-  }
-
-  static BH cast(Object o) {
-    return (BH) o;
   }
 
   static void testField(int i, BH z1, B b) {
@@ -43,7 +42,8 @@ public class FieldTest {
       } else {
         assert !Albatross.backupField(B.class.getDeclaredField("i"), iback);
       }
-      BH bh = cast(b);
+      assert !hook || Albatross.hookClass(BH.class, B.class) == 0;
+      BH bh = Albatross.convert(b, BH.class);
       long address = Albatross.getObjectAddress(bh);
       filedBackupTest(iback, bh, b);
       for (int i = 0; i < 1000; i++)

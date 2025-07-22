@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 package qing.albatross.reflection;
 
 import java.lang.reflect.Constructor;
@@ -32,17 +33,21 @@ public class ConstructorDef<T> extends ReflectionBase {
     constructor.setAccessible(true);
   }
 
+  public Constructor<T> getConstructor() {
+    return constructor;
+  }
+
   public ConstructorDef(Set<Class<?>> dependencies, Class<?> cls, Field field) throws Exception {
-    ArgumentType mi = field.getAnnotation(ArgumentType.class);
-    ArgumentTypeName mri;
+    ArgumentType argumentType = field.getAnnotation(ArgumentType.class);
+    ArgumentTypeName argumentTypeName;
     ClassLoader classLoader = cls.getClassLoader();
-    if (mi != null) {
-      Class<?>[] parameterTypes = mi.value();
+    if (argumentType != null) {
+      Class<?>[] parameterTypes = argumentType.value();
       Albatross.checkParameterTypes(dependencies, parameterTypes, null, classLoader);
       this.constructor = (Constructor<T>) cls.getDeclaredConstructor(parameterTypes);
-    } else if ((mri = field.getAnnotation(ArgumentTypeName.class)) != null) {
-      String[] classes = mri.value();
-      Class<?>[] paramClasses = ReflectUtils.getArgumentTypesFromString(classes, classLoader,false);
+    } else if ((argumentTypeName = field.getAnnotation(ArgumentTypeName.class)) != null) {
+      String[] classes = argumentTypeName.value();
+      Class<?>[] paramClasses = ReflectUtils.getArgumentTypesFromString(classes, classLoader, false);
       this.constructor = (Constructor<T>) cls.getDeclaredConstructor(paramClasses);
     } else {
       this.constructor = (Constructor<T>) cls.getDeclaredConstructor();
