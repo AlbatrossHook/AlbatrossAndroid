@@ -1,11 +1,11 @@
-# Albatross Android - Hook Framework for Android
+# Albatross Android - Hook And Reflection Framework for Android
  
 ----------------
 
 
 
 ## Overview
-**Albatross Android** is a high-performance, low-impact hooking framework designed for Android systems (Android 8.0 - Android 16). It is part of the broader **Albatross** ecosystem (including Albatross Server, Core, Manager, etc.), originally named after a nostalgic VR project from the developer's university days.
+**Albatross Android** is a high-performance, low-impact hooking and reflection framework designed for Android systems (Android 8.0 - Android 16). It is part of the broader **Albatross** ecosystem (including Albatross Server, Core, Manager, etc.), originally named after a nostalgic VR project from the developer's university days.
 
 The framework enables method/field hooking through **Hooker classes (mirror classes)** that declaratively describe targets. The system automatically deduces target methods/fields and allows seamless interaction with hooked classes. Unlike traditional reflection-based approaches, it eliminates performance overhead while maintaining safety and compatibility.
 

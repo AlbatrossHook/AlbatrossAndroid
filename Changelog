@@ -1,3 +1,9 @@
+version 1.0.2
+ - Support backing up the fields of the parent class and setting possible aliases for the fields.
+ - The specific type of a field can be determined by passing objects.
+ - Support setting the effective Android system scope.
+ - Prioritize using AOT code
+
 version 1.0.1
  - Prohibit any instance methods, even if there are unrecognized annotations.
  - Multiple identical backup methods are not allowed.
