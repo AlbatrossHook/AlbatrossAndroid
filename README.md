@@ -261,7 +261,7 @@ public static void test() throws AlbatrossErr {
 
 ##  Future Plans
 Potential features include Java instruction hooking, Java code tracing, dynamic hooking (where a single method can hook methods from multiple classes), call chain hooking, and unhooking capabilities. However, due to resource limitations, the implementation of these features will be prioritized based on user feedback.
-
+More tools and documentation will follow. Stay tuned for updates on `albatross-server`, `albatross-core`,`albatross-manager` and more!
 
 
 
@@ -278,9 +278,11 @@ Inspired by the YAHFA framework while introducing architectural improvements for
 ## License
 
 Apache License 2.0
-See [LICENSE](https://github.com/AlbatrossHook/AlbatrossAndroid/blob/main/LICENSE) for details.
+See [LICENSE](LICENSE) for details.
 
 
-##  Future Plans
+##  Related Documentation
 
-More tools and documentation will follow. Stay tuned for updates on `albatross-server`, `albatross-core`,`albatross-manager` and more!
+- [Annotations](docs/annotatin_reference.md) — Full list of hooking and configuration annotations
+- [API Reference](#) — Public methods and usage
+- [Exception Handling](#) — Error types and recovery strategies
