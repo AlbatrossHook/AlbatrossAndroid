@@ -16,7 +16,7 @@
 
 package qing.albatross.annotation;
 
-import static qing.albatross.annotation.CompileOption.COMPILE_DEFAULT;
+import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -29,8 +29,8 @@ public @interface TargetClass {
   Class<?> value() default TargetClass.class;
   String[] className() default {};
   boolean pendingHook() default false;
-  int compileHooker() default COMPILE_DEFAULT;
-  int compileTarget() default COMPILE_DEFAULT;
-  int compileHookerBackup() default COMPILE_DEFAULT;
+  int hookerExec() default DEFAULT_OPTION;
+  int targetExec() default DEFAULT_OPTION;
+  int hookerBackupExec() default DEFAULT_OPTION;
   boolean required() default true;
 }

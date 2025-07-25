@@ -3,14 +3,14 @@ package qing.albatross.demo.android;
 import android.os.Handler;
 import android.os.Message;
 
-import qing.albatross.annotation.CompileOption;
+import qing.albatross.annotation.ExecOption;
 import qing.albatross.annotation.MethodBackup;
 import qing.albatross.annotation.MethodHook;
 import qing.albatross.annotation.TargetClass;
 import qing.albatross.core.Albatross;
 import qing.albatross.exception.AlbatrossException;
 
-@TargetClass(value = Handler.class, compileHooker = CompileOption.COMPILE_OPTIMIZED)
+@TargetClass(value = Handler.class, hookerExec = ExecOption.JIT_OPTIMIZED)
 public class HandlerHook {
 
   @MethodBackup

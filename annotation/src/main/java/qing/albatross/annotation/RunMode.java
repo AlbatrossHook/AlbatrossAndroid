@@ -16,25 +16,15 @@
 
 package qing.albatross.annotation;
 
-import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
+import static qing.albatross.annotation.ExecOption.NATIVE_CODE;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface StaticMethodHookBackup {
-  String[] value() default {};
-  String[] name() default {};
-  Class<?> targetClass() default TargetClass.class;
-  String[] className() default {};
-  int hookerExec() default DEFAULT_OPTION;
-  int targetExec() default DEFAULT_OPTION;
-  boolean required() default false;
-  int option() default DefOption.DEFAULT;
-  int minSdk() default 0;
-  int maxSdk() default 0;
+public @interface RunMode {
+  int value() default NATIVE_CODE;
 }

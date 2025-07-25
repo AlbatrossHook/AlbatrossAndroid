@@ -18,7 +18,7 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
-import qing.albatross.annotation.CompileOption;
+import qing.albatross.annotation.ExecOption;
 import qing.albatross.annotation.MethodBackup;
 import qing.albatross.core.Albatross;
 import qing.albatross.demo.android.ActivityH;
@@ -147,7 +147,7 @@ public class AlbatrossDemoMainActivity extends Activity {
     long isCompile = Albatross.entryPointFromQuickCompiledCode(
         AlbatrossDemoMainActivity.class.getDeclaredMethod(
             "crash", View.class));
-    int v = Albatross.compileClass(AlbatrossDemoMainActivity.class, CompileOption.COMPILE_OPTIMIZED);
+    int v = Albatross.compileClass(AlbatrossDemoMainActivity.class, ExecOption.JIT_OPTIMIZED);
     textView.setText(
         "compile:" + v + " isCompile:" + isCompile + " field:" + !Albatross.containsFlags(
             Albatross.FLAG_FIELD_INVALID
@@ -230,7 +230,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   }
 
   public void CompileO(View view) {
-    Albatross.setCompileConfiguration(CompileOption.COMPILE_OPTIMIZED, CompileOption.COMPILE_OPTIMIZED, CompileOption.COMPILE_OPTIMIZED_JIT);
+    Albatross.setCompileConfiguration(ExecOption.JIT_OPTIMIZED, ExecOption.JIT_OPTIMIZED, ExecOption.RECOMPILE_OPTIMIZED);
   }
 
   public void infer(View view) throws AlbatrossErr {

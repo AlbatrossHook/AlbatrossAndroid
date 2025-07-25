@@ -13,7 +13,7 @@ A **hooker** is a class that mirrors a target class and contains the logic for h
 - Define replacement logic for target methods via `@MethodHook`, `@StaticMethodHook`, or `@ConstructorHook`
 - Define backup logic for original behavior via `@MethodBackup`, `@StaticMethodBackup`, or `@ConstructorBackup`
 - Access and manipulate fields of the target class using `@FieldRef`
-- Control compilation behavior using compile options
+- **Execution configuration** to control how code is compiled and executed (JIT/AOT/Interpreted)
 
 ### 2. TargetClass
 The **target class** is the class being hooked. It is defined using the `@TargetClass` annotation on the hooker class or manually passed to the `hookClass(hooker, targetClass)` method.
@@ -25,10 +25,9 @@ The **target class** is the class being hooked. It is defined using the `@Target
 | `value()`        | `Class<?>`      | The target class type |
 | `className()`    | `String[]`      | Array of class names to match (for inaccessible or lazy-loaded classes) |
 | `pendingHook()`  | `boolean`       | If true, the hook is deferred until the class is loaded |
-| `compileHooker()`| `int`           | Compilation strategy for the hooker itself |
-| `compileTarget()`| `int`           | Compilation strategy for the target class |
+| `hookerExec()`| `int`           | Execution strategy for the hooker itself |
+| `targetExec()`| `int`           | Execution strategy for the target class |
 | `required()`     | `boolean`       | If true, an error is thrown if the class is not found |
-| `minSdk()`, `maxSdk()` | `int`     | SDK version constraints for hooking |
 
 ---
 
@@ -59,8 +58,8 @@ Albatross provides a rich set of annotations to define hooking and backup logic 
 | `targetClass()`  | `Class<?>`      | Explicitly specify the target class                    |
 | `className()`    | `String[]`      | Class names for deferred or inaccessible classes       |
 | `required()`     | `boolean`       | If true, an error is thrown if the method is not found |
-| `compileHooker()`| `int`           | Compilation strategy for the hook method               |
-| `compileTarget()`| `int`           | Compilation strategy for the original method           |
+| `hookerExec()`| `int`           | Execution strategy for the hook method               |
+| `targetExec()`| `int`           | Execution strategy for the original method           |
 | `option()`       | `int`           | Hooking behavior option (e.g., `DefOption.VIRTUAL`)    |
 | `minSdk()`, `maxSdk()` | `int`     | SDK version constraints for hooking                    |
 
@@ -83,29 +82,27 @@ Use `@FieldRef` to access fields of the target class from the hooker.
 ---
 
 
-##  Compilation Options
-
-Albatross allows fine-grained control over how hooker and target code is compiled at runtime using bit flags.
-
+##  Execution Options (`ExecOption`)
+Albatross allows fine-grained control over how hooker and target code is executed at runtime using bit flags.
 ### Supported Compile Options
-| Flag                     | Description |
-|--------------------------|-------------|
-| `COMPILE_NONE`           | No compilation |
-| `COMPILE_DEFAULT`        | Use default compilation strategy |
-| `COMPILE_OSR`            | On-Stack Replacement (OSR) |
-| `COMPILE_BASELINE`       | Baseline compilation |
-| `COMPILE_OPTIMIZED`      | Optimized compilation |
-| `COMPILE_DECOMPILE`      | Use JIT compilation |
-| `COMPILE_DISABLE_AOT`    | Disable AOT compilation |
-| `COMPILE_DISABLE_JIT`    | Disable JIT compilation |
-| `COMPILE_AOT`            | Use AOT compilation |
+| Flag                     | Description                    |
+|--------------------------|--------------------------------|
+| `DO_NOTHING`           | No compilation                 |
+| `DEFAULT_OPTION`        | Use default execution strategy |
+| `JIT_OSR`            | On-Stack Replacement (OSR)     |
+| `JIT_BASELINE`       | Baseline compilation           |
+| `JIT_OPTIMIZED`      | Optimized compilation          |
+| `INTERPRETER`      | Use interpreter mode               |
+| `COMPILE_DISABLE_AOT`    | Disable AOT code               |
+| `COMPILE_DISABLE_JIT`    | Disable JIT compilation        |
+| `COMPILE_AOT`            | Use AOT                        |
 
 ### Common Combinations:
 | Combination               | Description               |
 |---------------------------|---------------------------|
-| `COMPILE_OSR_JIT`         | Jit recompile + OSR       |
-| `COMPILE_BASELINE_JIT`    | Jit recompile + Baseline  |
-| `COMPILE_OPTIMIZED_JIT`   | Jit recompile + Optimized |
+| `RECOMPILE_OSR`         | Jit recompile + OSR       |
+| `RECOMPILE_BASELINE`    | Jit recompile + Baseline  |
+| `RECOMPILE_OPTIMIZED`   | Jit recompile + Optimized |
 
 ---
 

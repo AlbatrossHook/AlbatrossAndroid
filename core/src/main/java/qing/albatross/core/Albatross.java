@@ -17,11 +17,14 @@
 package qing.albatross.core;
 
 
-import static qing.albatross.annotation.CompileOption.COMPILE_AOT;
-import static qing.albatross.annotation.CompileOption.COMPILE_DECOMPILE;
-import static qing.albatross.annotation.CompileOption.COMPILE_DEFAULT;
-import static qing.albatross.annotation.CompileOption.COMPILE_NONE;
-import static qing.albatross.annotation.CompileOption.COMPILE_OPTIMIZED;
+import static qing.albatross.annotation.ExecOption.AOT;
+import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
+import static qing.albatross.annotation.ExecOption.DO_NOTHING;
+import static qing.albatross.annotation.ExecOption.INTERPRETER;
+import static qing.albatross.annotation.ExecOption.DECOMPILE;
+import static qing.albatross.annotation.ExecOption.JIT_OPTIMIZED;
+import static qing.albatross.annotation.ExecOption.NATIVE_CODE;
+import static qing.albatross.annotation.ExecOption.RECOMPILE_OPTIMIZED;
 import static qing.albatross.reflection.ReflectUtils.getArgumentTypesFromString;
 
 import android.annotation.SuppressLint;
@@ -57,6 +60,7 @@ import qing.albatross.annotation.MethodBackup;
 import qing.albatross.annotation.DefOption;
 import qing.albatross.annotation.MethodHook;
 import qing.albatross.annotation.MethodHookBackup;
+import qing.albatross.annotation.RunMode;
 import qing.albatross.annotation.ParamInfo;
 import qing.albatross.annotation.StaticMethodBackup;
 import qing.albatross.annotation.StaticMethodHook;
@@ -268,18 +272,18 @@ public final class Albatross {
   }
 
   public static boolean replace(Member target, Method hook) throws AlbatrossException {
-    return backupAndHook(target, hook, null, true, true, null, COMPILE_NONE, COMPILE_NONE);
+    return backupAndHook(target, hook, null, true, true, null, DO_NOTHING, DO_NOTHING);
   }
 
   public static boolean backupAndHook(Member target, Method hook, Method backup) throws AlbatrossException {
-    return backupAndHook(target, hook, backup, true, true, null, COMPILE_NONE, COMPILE_NONE);
+    return backupAndHook(target, hook, backup, true, true, null, DO_NOTHING, DO_NOTHING);
   }
 
   private static int hookDependency(Set<Class<?>> dependencies) throws HookerStructErr {
     return 0;
   }
 
-  public static boolean backupAndHook(Member target, Method hook, Method backup, boolean check, boolean checkReturn, Set<Class<?>> dependencies, int compile_target, int compile_hooker) throws AlbatrossException {
+  public static boolean backupAndHook(Member target, Method hook, Method backup, boolean check, boolean checkReturn, Set<Class<?>> dependencies, int targetExecMode, int hookerExecMode) throws AlbatrossException {
     if (initStatus > STATUS_INIT_OK)
       return false;
     if (target == null) {
@@ -318,7 +322,7 @@ public final class Albatross {
     if (doTransaction) {
       transactionBegin();
     }
-    int result = backupAndHookNative(target, hook, backup, compile_target, compile_hooker);
+    int result = backupAndHookNative(target, hook, backup, targetExecMode, hookerExecMode);
     if (doTransaction) {
       hookDependency(currentDependencies);
       transactionEnd(true);
@@ -334,10 +338,10 @@ public final class Albatross {
   }
 
   public static boolean backup(Member target, Method backup) throws AlbatrossException {
-    return backup(target, backup, true, true, null, COMPILE_NONE);
+    return backup(target, backup, true, true, null, DO_NOTHING);
   }
 
-  public static boolean backup(Member target, Method backup, boolean check, boolean checkReturn, Set<Class<?>> dependencies, int compile) throws AlbatrossException {
+  public static boolean backup(Member target, Method backup, boolean check, boolean checkReturn, Set<Class<?>> dependencies, int execMode) throws AlbatrossException {
     if (initStatus > STATUS_INIT_OK)
       return false;
     if (target == null) {
@@ -365,7 +369,7 @@ public final class Albatross {
     if (doTransaction) {
       transactionBegin();
     }
-    int result = backupNative(target, backup, compile);
+    int result = backupNative(target, backup, execMode);
     if (doTransaction) {
       hookDependency(currentDependencies);
       transactionEnd(true);
@@ -416,11 +420,11 @@ public final class Albatross {
 
   private synchronized static native int unHookNative(Object target, Method hook, Method backup);
 
-  private synchronized static native int backupAndHookNative(Object target, Method hook, Method backup, int compile_target, int compile_hooker);
+  private synchronized static native int backupAndHookNative(Object target, Method hook, Method backup, int targetExecMode, int hookerExecMode);
 
   private synchronized static native int unBackupNative(Method backup);
 
-  private synchronized static native int backupNative(Object target, Method backup, int compile);
+  private synchronized static native int backupNative(Object target, Method backup, int execMode);
 
   public synchronized static native int backupFieldNative(Field target, Field backup);
 
@@ -431,7 +435,7 @@ public final class Albatross {
 
   public synchronized static native int decompileMethod(Method method, boolean disableJit);
 
-  private static native int compileMethodNative(Member method, int compile);
+  private static native int compileMethodNative(Member method, int execMode);
 
   public static boolean isCompiled(Method method) {
     return entryPointFromQuickCompiledCode(method) != 0;
@@ -445,18 +449,34 @@ public final class Albatross {
     return compileClassNative(clazz, compileOption);
   }
 
-  private static native int compileClassNative(Class<?> clazz, int compile);
-
-  public static native int compileHooker(Class<?> clazz);
-
-  public static boolean compileMethod(Member method) {
-    return compileMethod(method, COMPILE_OPTIMIZED | COMPILE_AOT);
+  public static int compileClassByAnnotation(Class<?> clazz, int compileOption) {
+    if (containsFlags(FLAG_NO_COMPILE))
+      return 0;
+    Method[] methods = clazz.getDeclaredMethods();
+    RunMode runMode;
+    int r = 0;
+    for (Method method : methods) {
+      if ((runMode = method.getAnnotation(RunMode.class)) != null) {
+        if (compileMethod(method, runMode.value()))
+          r += 1;
+      } else {
+        if (compileMethod(method, compileOption))
+          r += 1;
+      }
+    }
+    return r;
   }
 
-  public static boolean compileMethod(Member method, int compile) {
+  private static native int compileClassNative(Class<?> clazz, int execMode);
+
+  public static boolean compileMethod(Member method) {
+    return compileMethod(method, NATIVE_CODE);
+  }
+
+  public static boolean compileMethod(Member method, int execMode) {
     if (containsFlags(FLAG_NO_COMPILE))
       return false;
-    int compileResult = compileMethodNative(method, compile);
+    int compileResult = compileMethodNative(method, execMode);
     if (compileResult == 0)
       return true;
     return false;
@@ -577,36 +597,36 @@ public final class Albatross {
           if (sdkInt > 28 && sdkInt < 35) {
             Class<?> Reflection = Class.forName("sun.reflect.Reflection");
             addToVisit(Reflection);
-            Albatross.backup(Reflection.getDeclaredMethod("getCallerClass"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, COMPILE_AOT);
+            Albatross.backup(Reflection.getDeclaredMethod("getCallerClass"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, AOT);
           } else {
             Class<?> VMStack = Class.forName("dalvik.system.VMStack");
             addToVisit(VMStack);
-            Albatross.backup(VMStack.getDeclaredMethod("getStackClass1"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, COMPILE_AOT);
+            Albatross.backup(VMStack.getDeclaredMethod("getStackClass1"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, AOT);
           }
           Class<?> ActivityThread = Class.forName("android.app.ActivityThread");
           addToVisit(ActivityThread);
-          Albatross.backup(ActivityThread.getDeclaredMethod("currentApplication"), Albatross.class.getDeclaredMethod("currentApplication"), false, false, null, COMPILE_AOT);
-          default_compile_option_hooker_backup = COMPILE_DECOMPILE;
+          Albatross.backup(ActivityThread.getDeclaredMethod("currentApplication"), Albatross.class.getDeclaredMethod("currentApplication"), false, false, null, AOT);
+          defaultHookerBackupExecMode = INTERPRETER;
           if (Debug.isDebuggerConnected() || containsFlags(FLAG_NO_COMPILE)) {
             albatross_flags |= FLAG_NO_COMPILE;
             if (sdkInt <= 25) {
               disableFieldBackup();
             }
-            default_compile_option_hooker = COMPILE_NONE;
-            default_compile_option_target = COMPILE_NONE;
+            defaultHookerExecMode = DO_NOTHING;
+            defaultTargetExecMode = DO_NOTHING;
           } else {
             if ((initResult & 8) != 0) {
-              default_compile_option_hooker = COMPILE_OPTIMIZED | COMPILE_AOT;
-              default_compile_option_target = COMPILE_OPTIMIZED | COMPILE_AOT;
+              defaultHookerExecMode = JIT_OPTIMIZED | AOT;
+              defaultTargetExecMode = JIT_OPTIMIZED | AOT;
             } else {
-              default_compile_option_hooker = COMPILE_OPTIMIZED;
-              default_compile_option_target = COMPILE_OPTIMIZED;
+              defaultHookerExecMode = JIT_OPTIMIZED;
+              defaultTargetExecMode = JIT_OPTIMIZED;
             }
             if (sdkInt <= 25) {
               disableFieldBackup();
             } else {
               if ((initResult & 2) == 2)
-                default_compile_option_hooker_backup = COMPILE_DECOMPILE | COMPILE_OPTIMIZED;
+                defaultHookerBackupExecMode = RECOMPILE_OPTIMIZED;
             }
           }
           if (!containsFlags(FLAG_NO_COMPILE)) {
@@ -649,7 +669,7 @@ public final class Albatross {
     Log.e(TAG, msg, tr);
   }
 
-  public static HookRecord putHook(Set<Class<?>> dependencies, HashMap<Object, HookRecord> hookRecord, Member target, Method hook, boolean isBackup, int compile_target, int compile_hooker) throws AlbatrossException {
+  public static HookRecord putHook(Set<Class<?>> dependencies, HashMap<Object, HookRecord> hookRecord, Member target, Method hook, boolean isBackup, int targetExecMode, int hookerExecMode) throws AlbatrossException {
     HookRecord hookMethod;
     checkMethodReturn(dependencies, target, hook);
     if ((hookMethod = hookRecord.get(target)) == null) {
@@ -658,25 +678,25 @@ public final class Albatross {
       hookRecord.put(target, hookMethod);
       if (isBackup)
         hookMethod.backup = hook;
-      if (compile_target != CLASS_ALREADY_HOOK)
-        hookMethod.compile_target = compile_target;
+      if (targetExecMode != CLASS_ALREADY_HOOK)
+        hookMethod.targetExec = targetExecMode;
       else
-        hookMethod.compile_target = COMPILE_DEFAULT;
+        hookMethod.targetExec = DEFAULT_OPTION;
     } else {
       if (isBackup) {
         if (hookMethod.backup != null)
           throw new RepetitiveBackupErr(hook);
         hookMethod.backup = hook;
       }
-      if (compile_target != CLASS_ALREADY_HOOK)
-        hookMethod.compile_target = compile_target;
+      if (targetExecMode != CLASS_ALREADY_HOOK)
+        hookMethod.targetExec = targetExecMode;
     }
     hookMethod.hook = hook;
-    hookMethod.compile_hooker = compile_hooker;
+    hookMethod.hookerExec = hookerExecMode;
     return hookMethod;
   }
 
-  private static HookRecord putBackup(Set<Class<?>> dependencies, HashMap<Object, HookRecord> hookRecord, Member target, Method backup, int compile_target) throws AlbatrossException {
+  private static HookRecord putBackup(Set<Class<?>> dependencies, HashMap<Object, HookRecord> hookRecord, Member target, Method backup, int targetExecMode) throws AlbatrossException {
     HookRecord hookMethod;
     checkMethodReturn(dependencies, target, backup);
     if (hookRecord.containsKey(target)) {
@@ -689,7 +709,7 @@ public final class Albatross {
     if (hookMethod.backup != null)
       throw new RepetitiveBackupErr(hookMethod.backup);
     hookMethod.backup = backup;
-    hookMethod.compile_target = compile_target;
+    hookMethod.targetExec = targetExecMode;
     return hookMethod;
   }
 
@@ -923,31 +943,27 @@ public final class Albatross {
     initStatus &= ~STATUS_DISABLED;
   }
 
-  private static int default_compile_option_hooker;
-  private static int default_compile_option_hooker_backup;
-  private static int default_compile_option_target;
+  private static int defaultHookerExecMode;
+  private static int defaultHookerBackupExecMode;
+  private static int defaultTargetExecMode;
 
-  public static void setCompileConfiguration(int compile_target, int compile_hooker) {
+  public static void setCompileConfiguration(int targetExecMode, int hookerExecMode) {
     if (containsFlags(FLAG_NO_COMPILE))
-      default_compile_option_hooker_backup = COMPILE_DECOMPILE;
+      defaultHookerBackupExecMode = INTERPRETER;
     else
-      default_compile_option_hooker_backup = COMPILE_DECOMPILE | COMPILE_OPTIMIZED;
-    default_compile_option_target = compile_target;
-    default_compile_option_hooker = compile_hooker;
+      defaultHookerBackupExecMode = RECOMPILE_OPTIMIZED;
+    defaultTargetExecMode = targetExecMode;
+    defaultHookerExecMode = hookerExecMode;
   }
 
   public static void disableCompileBackupCall() {
-    default_compile_option_hooker_backup = COMPILE_DECOMPILE;
+    defaultHookerBackupExecMode = INTERPRETER;
   }
 
-  public static void setCompileConfiguration(int compile_target, int compile_hooker, int compile_hooker_backup) {
-    default_compile_option_target = compile_target;
-    default_compile_option_hooker = compile_hooker;
-    if ((compile_hooker_backup & COMPILE_DECOMPILE) != COMPILE_DECOMPILE) {
-      log("AOT compilation may result in a loop calling the function itself");
-      compile_hooker_backup |= COMPILE_DECOMPILE;
-    }
-    default_compile_option_hooker_backup = compile_hooker_backup;
+  public static void setCompileConfiguration(int targetExecMode, int hookerExecMode, int compile_hooker_backup) {
+    defaultTargetExecMode = targetExecMode;
+    defaultHookerExecMode = hookerExecMode;
+    defaultHookerBackupExecMode = compile_hooker_backup | DECOMPILE;
   }
 
 
@@ -967,25 +983,25 @@ public final class Albatross {
     } catch (Exception e) {
       throw new RuntimeException("init hook class fail", e);
     }
-    int hooker_default_compile_option = default_compile_option_hooker;
-    int hooker_backup_default_compile_option = default_compile_option_hooker_backup;
-    int target_default_compile_option = default_compile_option_target;
+    int hookerDefaultExecOption = defaultHookerExecMode;
+    int hookerBackupDefaultExecOption = defaultHookerBackupExecMode;
+    int targetDefaultExecOption = defaultTargetExecMode;
     boolean isDebug = Debug.isDebuggerConnected();
     if (defaultClass == null) {
       TargetClass targetClass = hooker.getAnnotation(TargetClass.class);
       if (targetClass != null) {
         if (!isDebug) {
-          int hooker_compile_option = targetClass.compileHooker();
-          int target_compile_option = targetClass.compileTarget();
-          int hooker_backup_compile_option = targetClass.compileHookerBackup();
-          if (hooker_compile_option != COMPILE_DEFAULT) {
-            hooker_default_compile_option = hooker_compile_option;
+          int hookerExecOption = targetClass.hookerExec();
+          int targetExecOption = targetClass.targetExec();
+          int hookerBackupExecOption = targetClass.hookerBackupExec();
+          if (hookerExecOption != DEFAULT_OPTION) {
+            hookerDefaultExecOption = hookerExecOption;
           }
-          if (target_compile_option != COMPILE_DEFAULT) {
-            target_default_compile_option = hooker_compile_option;
+          if (targetExecOption != DEFAULT_OPTION) {
+            targetDefaultExecOption = targetExecOption;
           }
-          if (hooker_backup_compile_option != COMPILE_DEFAULT) {
-            hooker_backup_default_compile_option = hooker_backup_compile_option;
+          if (hookerBackupExecOption != DEFAULT_OPTION) {
+            hookerBackupDefaultExecOption = hookerBackupExecOption;
           }
         }
         defaultClass = getTargetClassFromAnnotation(targetClass, loader);
@@ -1014,6 +1030,7 @@ public final class Albatross {
         addToVisit(defaultClass);
       }
     }
+    int runModeAnnotationCount = 0;
     int success_count = 0;
     Field[] fields = hooker.getDeclaredFields();
     Set<Class<?>> dependencies = new HashSet<>();
@@ -1072,7 +1089,8 @@ public final class Albatross {
             }
             if (backupField(dependencies, targetField, field, targetType)) {
               success_count += 1;
-              default_compile_option_hooker |= COMPILE_DECOMPILE;
+              hookerBackupDefaultExecOption &= ~AOT;
+              hookerBackupDefaultExecOption |= INTERPRETER;
             }
           } catch (NoSuchFieldException | FieldException e) {
             if (fieldRef.required())
@@ -1173,7 +1191,7 @@ public final class Albatross {
     boolean needBackup = false;
     String[] aliases = null;
     int sdk = Build.VERSION.SDK_INT;
-    int hooker_compile = hooker_default_compile_option;
+    int hookerExec = hookerDefaultExecOption;
     boolean methodRequired;
     int methodOption;
     for (Method m : hooker.getDeclaredMethods()) {
@@ -1190,7 +1208,7 @@ public final class Albatross {
       String[] className;
       String[] args;
       int hookWay;
-      int target_compile = CLASS_ALREADY_HOOK;
+      int targetExec = CLASS_ALREADY_HOOK;
       if ((hookBackup = m.getAnnotation(MethodHookBackup.class)) != null) {
         targetStatic = hookBackup.isStatic();
         className = hookBackup.className();
@@ -1199,8 +1217,8 @@ public final class Albatross {
         targetClass = hookBackup.targetClass();
         aliases = hookBackup.name();
         hookWay = 1;
-        hooker_compile = hookBackup.compileHooker();
-        target_compile = hookBackup.compileTarget();
+        hookerExec = hookBackup.hookerExec();
+        targetExec = hookBackup.targetExec();
         methodRequired = hookBackup.required();
         methodOption = hookBackup.option();
         minSdk = hookBackup.minSdk();
@@ -1209,10 +1227,10 @@ public final class Albatross {
         targetStatic = methodHook.isStatic();
         targetClass = methodHook.targetClass();
         args = methodHook.value();
-        hooker_compile = methodHook.compileHooker();
+        hookerExec = methodHook.hookerExec();
         if ((methodBackup = m.getAnnotation(MethodBackup.class)) != null) {
           needBackup = true;
-          target_compile = methodBackup.compileTarget();
+          targetExec = methodBackup.targetExec();
         } else
           needBackup = false;
         aliases = methodHook.name();
@@ -1226,9 +1244,9 @@ public final class Albatross {
         targetStatic = true;
         targetClass = staticMethodHook.targetClass();
         args = staticMethodHook.value();
-        hooker_compile = staticMethodHook.compileHooker();
+        hookerExec = staticMethodHook.hookerExec();
         if ((staticMethodBackup = m.getAnnotation(StaticMethodBackup.class)) != null) {
-          target_compile = staticMethodBackup.compileTarget();
+          targetExec = staticMethodBackup.targetExec();
           needBackup = true;
         } else
           needBackup = false;
@@ -1247,8 +1265,8 @@ public final class Albatross {
         aliases = staticMethodHookBackup.name();
         hookWay = 1;
         className = staticMethodHookBackup.className();
-        hooker_compile = staticMethodHookBackup.compileHooker();
-        target_compile = staticMethodHookBackup.compileTarget();
+        hookerExec = staticMethodHookBackup.hookerExec();
+        targetExec = staticMethodHookBackup.targetExec();
         methodRequired = staticMethodHookBackup.required();
         methodOption = staticMethodHookBackup.option();
         minSdk = staticMethodHookBackup.minSdk();
@@ -1258,9 +1276,9 @@ public final class Albatross {
         targetStatic = false;
         targetClass = constructorHook.targetClass();
         args = constructorHook.value();
-        hooker_compile = constructorHook.compileHooker();
+        hookerExec = constructorHook.hookerExec();
         if ((constructorBackup = m.getAnnotation(ConstructorBackup.class)) != null) {
-          target_compile = constructorBackup.compileTarget();
+          targetExec = constructorBackup.targetExec();
           needBackup = true;
         } else
           needBackup = false;
@@ -1276,8 +1294,8 @@ public final class Albatross {
         className = constructorHookBackup.className();
         needBackup = true;
         targetStatic = false;
-        hooker_compile = constructorHookBackup.compileHooker();
-        target_compile = constructorHookBackup.compileTarget();
+        hookerExec = constructorHookBackup.hookerExec();
+        targetExec = constructorHookBackup.targetExec();
         methodRequired = constructorHookBackup.required();
         methodOption = constructorHookBackup.option();
         minSdk = constructorHookBackup.minSdk();
@@ -1289,7 +1307,7 @@ public final class Albatross {
         args = methodBackup.value();
         hookWay = 3;
         aliases = methodBackup.name();
-        target_compile = methodBackup.compileTarget();
+        targetExec = methodBackup.targetExec();
         methodRequired = methodBackup.required();
         methodOption = methodBackup.option();
         minSdk = methodBackup.minSdk();
@@ -1301,7 +1319,7 @@ public final class Albatross {
         args = staticMethodBackup.value();
         aliases = staticMethodBackup.name();
         hookWay = 3;
-        target_compile = staticMethodBackup.compileTarget();
+        targetExec = staticMethodBackup.targetExec();
         methodRequired = staticMethodBackup.required();
         methodOption = staticMethodBackup.option();
         minSdk = staticMethodBackup.minSdk();
@@ -1312,7 +1330,7 @@ public final class Albatross {
         className = constructorBackup.className();
         hookWay = 4;
         targetStatic = false;
-        target_compile = constructorBackup.compileTarget();
+        targetExec = constructorBackup.targetExec();
         methodRequired = constructorBackup.required();
         methodOption = constructorBackup.option();
         minSdk = constructorBackup.minSdk();
@@ -1320,6 +1338,10 @@ public final class Albatross {
       } else {
         if (!Modifier.isStatic(m.getModifiers()))
           throw new RedundantMethodErr(m);
+        RunMode runMode = m.getAnnotation(RunMode.class);
+        if (runMode != null) {
+          runModeAnnotationCount += 1;
+        }
         continue;
       }
       if (minSdk != 0) {
@@ -1437,9 +1459,9 @@ public final class Albatross {
               if ((methodOption & DefOption.NOTHING) == 0) {
                 HookRecord hookMethod;
                 if (hookWay == 1)
-                  hookMethod = putHook(dependencies, hookRecord, targetMethod, m, needBackup, target_compile, hooker_compile);
+                  hookMethod = putHook(dependencies, hookRecord, targetMethod, m, needBackup, targetExec, hookerExec);
                 else
-                  hookMethod = putBackup(dependencies, hookRecord, targetMethod, m, target_compile);
+                  hookMethod = putBackup(dependencies, hookRecord, targetMethod, m, targetExec);
                 hookMethod.checkMethSign = checkArgument;
               } else {
                 checkMethodReturn(dependencies, targetMethod, m);
@@ -1477,9 +1499,9 @@ public final class Albatross {
               if ((methodOption & DefOption.NOTHING) == 0) {
                 HookRecord hookMethod;
                 if (hookWay == 2)
-                  hookMethod = putHook(dependencies, hookRecord, targetConstructor, m, needBackup, target_compile, hooker_compile);
+                  hookMethod = putHook(dependencies, hookRecord, targetConstructor, m, needBackup, targetExec, hookerExec);
                 else
-                  hookMethod = putBackup(dependencies, hookRecord, targetConstructor, m, target_compile);
+                  hookMethod = putBackup(dependencies, hookRecord, targetConstructor, m, targetExec);
                 hookMethod.checkMethSign = checkArgument;
               } else {
                 checkMethodReturn(dependencies, targetConstructor, m);
@@ -1505,19 +1527,19 @@ public final class Albatross {
       try {
         boolean result;
         if (hook != null) {
-          if (hookMethod.compile_target == COMPILE_DEFAULT)
-            hookMethod.compile_target = target_default_compile_option;
-          if (hookMethod.compile_hooker == COMPILE_DEFAULT) {
+          if (hookMethod.targetExec == DEFAULT_OPTION)
+            hookMethod.targetExec = targetDefaultExecOption;
+          if (hookMethod.hookerExec == DEFAULT_OPTION) {
             if (hook == backup)
-              hookMethod.compile_hooker = hooker_backup_default_compile_option;
+              hookMethod.hookerExec = hookerBackupDefaultExecOption;
             else
-              hookMethod.compile_hooker = hooker_default_compile_option;
+              hookMethod.hookerExec = hookerDefaultExecOption;
           }
-          result = Albatross.backupAndHook(target, hook, backup, hookMethod.checkMethSign, false, dependencies, hookMethod.compile_target, hookMethod.compile_hooker);
+          result = Albatross.backupAndHook(target, hook, backup, hookMethod.checkMethSign, false, dependencies, hookMethod.targetExec, hookMethod.hookerExec);
         } else {
-          if (hookMethod.compile_target == COMPILE_DEFAULT)
-            hookMethod.compile_target = target_default_compile_option;
-          result = Albatross.backup(target, backup, hookMethod.checkMethSign, false, dependencies, hookMethod.compile_target);
+          if (hookMethod.targetExec == DEFAULT_OPTION)
+            hookMethod.targetExec = targetDefaultExecOption;
+          result = Albatross.backup(target, backup, hookMethod.checkMethSign, false, dependencies, hookMethod.targetExec);
         }
         if (result) {
           if (!slotMap.isEmpty()) {
@@ -1569,11 +1591,14 @@ public final class Albatross {
       }
     }
     if (!isDebug) {
-      if (hooker_default_compile_option != COMPILE_NONE) {
-        Albatross.compileClass(hooker, hooker_default_compile_option);
+      if (hookerDefaultExecOption != DO_NOTHING) {
+        compileClass(hooker, hookerDefaultExecOption);
       }
-      if (defaultClass != null && target_default_compile_option != COMPILE_NONE) {
-        Albatross.compileClass(defaultClass, hooker_default_compile_option);
+      if (defaultClass != null && targetDefaultExecOption != DO_NOTHING) {
+        if (runModeAnnotationCount == 0)
+          compileClass(defaultClass, hookerDefaultExecOption);
+        else
+          compileClassByAnnotation(defaultClass, hookerDefaultExecOption);
       }
     }
     if (!dependencies.isEmpty()) {

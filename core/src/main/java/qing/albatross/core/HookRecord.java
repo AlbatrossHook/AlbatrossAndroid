@@ -25,7 +25,7 @@ public class HookRecord {
   Member target;
   Method backup;
   Method hook;
-  int compile_target;
-  int compile_hooker;
+  int targetExec;
+  int hookerExec;
   boolean checkMethSign =false;
 }
