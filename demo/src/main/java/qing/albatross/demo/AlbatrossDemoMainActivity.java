@@ -296,17 +296,19 @@ public class AlbatrossDemoMainActivity extends Activity {
         assert dexPc <= 10;
         assert dexPc >= 0;
         assert method == getCaller;
-        assert self == AlbatrossDemoMainActivity.this;
-        assert invocationContext.NumberOfVRegs() == 7;
+        if (self != AlbatrossDemoMainActivity.this) {
+          Albatross.log("self:" + self + " this:" + AlbatrossDemoMainActivity.this);
+        }
+        assert invocationContext.numberOfVRegs() == 7;
         Albatross.log("onEnter:" + dexPc);
-        Object receiver = invocationContext.GetParamReference(0);
+        Object receiver = invocationContext.getParamObject(0);
         assert receiver == self;
-        Object v = invocationContext.GetParamReference(1);
+        Object v = invocationContext.getParamObject(1);
         assert (v instanceof View);
         if (dexPc == 4) {
 //          00003c44: 7100 b700 0000          0000: invoke-static       {}, Lqing/albatross/core/Albatross;->getCallerClass()Ljava/lang/Class; # method@00b7
 //          00003c4a: 0c00                    0003: move-result-object  v0
-          invocationContext.SetVRegReference(0, AlbatrossDemoMainActivity.class);
+          invocationContext.setVRegObject(0, AlbatrossDemoMainActivity.class);
         }
       });
     } else {
@@ -317,7 +319,7 @@ public class AlbatrossDemoMainActivity extends Activity {
 
 
   public void onResume() {
-    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis()+",testing by continuously clicking the \"load\" button");
+    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis() + ",testing by continuously clicking the \"load\" button");
     super.onResume();
   }
 

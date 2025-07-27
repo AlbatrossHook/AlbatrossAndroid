@@ -27,106 +27,173 @@ public class InvocationContext {
   }
 
 
-  public int NumberOfVRegs() {
+  public int numberOfVRegs() {
     return listener.getNumberVRegs(invocationContext);
   }
 
-  public float GetVRegFloat(int i) {
-    assert i < NumberOfVRegs();
-    return InstructionListener.GetVRegFloat(invocationContext, i);
+  public boolean getVRegBool(int i) {
+    return getVRegInt(i) != 0;
   }
 
-  public long GetVRegLong(int i) {
-    assert i < NumberOfVRegs();
-    return InstructionListener.GetVRegLong(invocationContext, i);
+  public char getVRegChar(int i) {
+    return (char) getVRegInt(i);
   }
 
-  public Object GetVRegReference(int i) {
-    assert i < NumberOfVRegs();
-    return InstructionListener.GetVRegReference(invocationContext, i);
+  public byte getVRegByte(int i) {
+    return (byte) getVRegInt(i);
   }
 
-  public int GetVReg(int i) {
-    assert i < NumberOfVRegs();
+
+  public short getVRegShort(int i) {
+    return (short) getVRegInt(i);
+  }
+
+  public int getVRegInt(int i) {
+    assert i < numberOfVRegs();
     return InstructionListener.GetVReg(invocationContext, i);
   }
 
-  public short GetVRegShort(int i) {
-    assert i < NumberOfVRegs();
-    return (short) GetVReg(i);
-  }
-
-  public boolean GetVRegBool(int i) {
-    assert i < NumberOfVRegs();
-    return GetVReg(i) != 0;
-  }
-
-
-  public float GetParamFloat(int i) {
-    i += listener.getFirstArgReg(invocationContext);
-    assert i < NumberOfVRegs();
+  public float getVRegFloat(int i) {
+    assert i < numberOfVRegs();
     return InstructionListener.GetVRegFloat(invocationContext, i);
   }
 
-  public long GetParamLong(int i) {
-    i += listener.getFirstArgReg(invocationContext);
-    assert i < NumberOfVRegs();
+  public long getVRegLong(int i) {
+    assert i + 1 < numberOfVRegs();
     return InstructionListener.GetVRegLong(invocationContext, i);
   }
 
-  public Object GetParamReference(int i) {
-    i += listener.getFirstArgReg(invocationContext);
-    assert i < NumberOfVRegs();
+  public double getVRegDouble(int i) {
+    assert i + 1 < numberOfVRegs();
+    return InstructionListener.GetVRegDouble(invocationContext, i);
+  }
+
+  public Object getVRegObject(int i) {
+    assert i < numberOfVRegs();
     return InstructionListener.GetVRegReference(invocationContext, i);
   }
 
-  public int GetParamInt(int i) {
-    i += listener.getFirstArgReg(invocationContext);
-    assert i < NumberOfVRegs();
-    return InstructionListener.GetVReg(invocationContext, i);
+
+  public boolean getParamBool(int i) {
+    return InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i)) != 0;
   }
 
-  public short GetParamShort(int i) {
-    i += listener.getFirstArgReg(invocationContext);
-    assert i < NumberOfVRegs();
-    return (short) GetVReg(i);
+  public char getParamChar(int i) {
+    return (char) InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
   }
 
-  public boolean GetParamBool(int i) {
-    i += listener.getFirstArgReg(invocationContext);
-    assert i < NumberOfVRegs();
-    return GetVReg(i) != 0;
+  public byte getParamByte(int i) {
+    return (byte) InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
+  }
+
+  public short getParamShort(int i) {
+    return (short) InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
   }
 
 
-  public int SetVReg(int i, int val) {
-    assert i < NumberOfVRegs();
-    return InstructionListener.SetVReg(invocationContext, i, val);
+  public int getParamInt(int i) {
+    return InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
   }
 
-  public int SetVRegBoolean(int i, boolean val) {
-    assert i < NumberOfVRegs();
+  public float getParamFloat(int i) {
+    return InstructionListener.GetVRegFloat(invocationContext, listener.getArgReg(invocationContext, i));
+  }
+
+  public long getParamLong(int i) {
+    return InstructionListener.GetVRegLong(invocationContext, listener.getArgRegTwoWord(invocationContext, i));
+  }
+
+  public double getParamDouble(int i) {
+    return InstructionListener.GetVRegDouble(invocationContext, listener.getArgRegTwoWord(invocationContext, i));
+  }
+
+  public Object getParamObject(int i) {
+    return InstructionListener.GetVRegReference(invocationContext, listener.getArgReg(invocationContext, i));
+  }
+
+
+  public int setVRegBool(int i, boolean val) {
+    assert i < numberOfVRegs();
     return InstructionListener.SetVReg(invocationContext, i, val ? 1 : 0);
   }
 
-  public float SetVRegFloat(int i, float val) {
-    assert i < NumberOfVRegs();
+  public int setVRegChar(int i, char val) {
+    assert i < numberOfVRegs();
+    return InstructionListener.SetVReg(invocationContext, i, val);
+  }
+
+  public int setVRegByte(int i, byte val) {
+    assert i < numberOfVRegs();
+    return InstructionListener.SetVReg(invocationContext, i, val);
+  }
+
+  public int setVRegShort(int i, short val) {
+    assert i < numberOfVRegs();
+    return InstructionListener.SetVReg(invocationContext, i, val);
+  }
+
+  public int setVRegInt(int i, int val) {
+    assert i < numberOfVRegs();
+    return InstructionListener.SetVReg(invocationContext, i, val);
+  }
+
+  public float setVRegFloat(int i, float val) {
+    assert i < numberOfVRegs();
     return InstructionListener.SetVRegFloat(invocationContext, i, val);
   }
 
-  public long SetVRegLong(int i, long val) {
-    assert i < NumberOfVRegs();
+  public long setVRegLong(int i, long val) {
+    assert i + 1 < numberOfVRegs();
     return InstructionListener.SetVRegLong(invocationContext, i, val);
   }
 
-  public double SetVRegDouble(int i, double val) {
-    assert i < NumberOfVRegs();
+  public double setVRegDouble(int i, double val) {
+    assert i + 1 < numberOfVRegs();
     return InstructionListener.SetVRegDouble(invocationContext, i, val);
   }
 
-  public void SetVRegReference(int i, Object val) {
-    assert i < NumberOfVRegs();
+  public void setVRegObject(int i, Object val) {
+    assert i < numberOfVRegs();
     InstructionListener.SetVRegReference(invocationContext, i, val);
   }
+
+
+  public int setParamBoolean(int i, boolean val) {
+    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val ? 1 : 0) ;
+  }
+
+  public int setParamChar(int i, char val) {
+    return  InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+  }
+
+  public int setParamByte(int i, byte val) {
+    return (byte) InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+  }
+
+  public int setParamShort(int i, short val) {
+    return  InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+  }
+
+
+  public int setParamInt(int i, int val) {
+    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+  }
+
+  public float setParamFloat(int i, float val) {
+    return InstructionListener.SetVRegFloat(invocationContext, listener.getArgReg(invocationContext, i), val);
+  }
+
+  public long setParamLong(int i, long val) {
+    return InstructionListener.SetVRegLong(invocationContext, listener.getArgRegTwoWord(invocationContext, i), val);
+  }
+
+  public double setParamDouble(int i, double val) {
+    return InstructionListener.SetVRegDouble(invocationContext, listener.getArgRegTwoWord(invocationContext, i), val);
+  }
+
+  public void setParamObject(int i, Object val) {
+    InstructionListener.SetVRegReference(invocationContext, listener.getArgReg(invocationContext, i), val);
+  }
+
 
 }

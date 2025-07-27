@@ -56,6 +56,18 @@ public class InstructionListener {
     return first_arg_reg;
   }
 
+  public int getArgReg(long invocationContext, int i) {
+    int idx = getFirstArgReg(invocationContext) + i;
+    assert idx < numberVRegs;
+    return idx;
+  }
+
+  public int getArgRegTwoWord(long invocationContext, int i) {
+    int idx = getFirstArgReg(invocationContext) + i;
+    assert idx + 1 < numberVRegs;
+    return idx;
+  }
+
   static native long hookInstructionNative(Member member, int minDexPc, int maxDexPc, Object callback);
 
   static native void unHookInstructionNative(long listenerId);
@@ -65,6 +77,8 @@ public class InstructionListener {
   static native float GetVRegFloat(long invocationContext, int i);
 
   static native long GetVRegLong(long invocationContext, int i);
+
+  static native double GetVRegDouble(long invocationContext, int i);
 
   static native Object GetVRegReference(long invocationContext, int i);
 
