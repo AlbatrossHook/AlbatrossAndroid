@@ -3,7 +3,6 @@
 ----------------
 
 
-
 ## Overview
 **Albatross Android** is a high-performance, low-impact hooking and reflection framework designed for Android systems (Android 8.0 - Android 16). It is part of the broader **Albatross** ecosystem (including Albatross Server, Core, Manager, etc.), originally named after a nostalgic VR project from the developer's university days.
 
@@ -38,6 +37,7 @@ Albatross adheres to the following design goals:
 ###  Platform Support
 - **Android Versions**:
     - Full support: API 26-34 (8.0-16)
+    - Instruction hook: API 24-34 (7.0-16)
     - Limited support: API 24-25 (7.0-7.1) ,field hooking disabled  due to Dex optimization constraints.
     - ❌ Unsupported: API 23 and below (6.0 Marshmallow and earlier)
 - **Architectures**: x86, x86_64, ARM, ARM64
@@ -56,14 +56,15 @@ Albatross adheres to the following design goals:
 
 ## Why Albatross?
 
-| Feature         | Traditional Frameworks                  | Albatross                                 |
-|-----------------|-----------------------------------------|-------------------------------------------|
-| Initialization  | Often triggers classes                  | Zero                                      |
-| Performance     | Reflection overhead                     | Native machine code speed                 |
-| System Impact   | Disables Profield/Inlining              | Preserves compiler optimizations          |
-| Safety          | Often bypasses API restrictions         | Respects non-public API policies          |
-| Batch Hooking   | Cannot atomize hook class and its dependencies                                  |Automatic(Active dependent hooker)
-| Pending Hooking | Not support(lazy initialization is not) | Trigger once target class is initialization |
+| Feature             | Traditional Frameworks                  | Albatross                                 |
+|---------------------|-----------------------------------------|-------------------------------------------|
+| Initialization      | Often triggers classes                  | Zero                                      |
+| Performance         | Reflection overhead                     | Native machine code speed                 |
+| System Impact       | Disables Profield/Inlining              | Preserves compiler optimizations          |
+| Safety              | Often bypasses API restrictions         | Respects non-public API policies          |
+| Batch Hooking       | Cannot atomize hook class and its dependencies                                  | Automatic(Active dependent hooker)        
+| Pending Hooking     | Not support(lazy initialization is not) | Trigger once target class is initialization |
+| Instruction Hooking | Not support | Support                                   |
 ---
 
 ## Project Structure
@@ -87,7 +88,7 @@ Android application for Albatross test.
  Similar to the `app` module, but specifically configured for 32 - bit Android applications.
 
 ## Usage Example
-### 1. hook activity method and access field.
+### 1. Hook activity method and access field.
 ```java
 // Define Hooker class
 @TargetClass(Activity.class)
@@ -132,7 +133,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   }
 }
 ```
-### 2. hook system server class `LocationManagerService`
+### 2. Hook system server class `LocationManagerService`
 
 ```java
 
@@ -200,7 +201,7 @@ public static void test() throws AlbatrossErr {
 }
 
 ````
-### 4. binder hook
+### 4. Binder hook
 ```java
 @TargetClass
   static class ParceledListSlice<T> {
@@ -249,6 +250,40 @@ public static void test() throws AlbatrossErr {
     assert res.size() == IPackageManager.count;
   }
 ```
+### 5. Instruction hook
+
+```java
+
+ InstructionListener listener = null;
+
+  public void instruction(View view) throws NoSuchMethodException {
+    if (listener == null) {
+      Method getCaller = AlbatrossDemoMainActivity.class.getDeclaredMethod("getCaller", View.class);
+      listener = Albatross.hookInstruction(getCaller, 0, 10, (method, self, dexPc, invocationContext) -> {
+        assert dexPc <= 10;
+        assert dexPc >= 0;
+        assert method == getCaller;
+        assert self == AlbatrossDemoMainActivity.this;
+        assert invocationContext.NumberOfVRegs() == 7;
+        Albatross.log("onEnter:" + dexPc);
+        Object receiver = invocationContext.GetParamReference(0);
+        assert receiver == self;
+        Object v = invocationContext.GetParamReference(1);
+        assert (v instanceof View);
+        if (dexPc == 4) {
+//          00003c44: 7100 b700 0000          0000: invoke-static       {}, Lqing/albatross/core/Albatross;->getCallerClass()Ljava/lang/Class; # method@00b7
+//          00003c4a: 0c00                    0003: move-result-object  v0
+          invocationContext.SetVRegReference(0, AlbatrossDemoMainActivity.class);
+        }
+      });
+    } else {
+      listener.unHook();
+      listener = null;
+    }
+  }
+
+
+```
 
 ## Use Cases
 - **Hotfixes**: Replace buggy methods at runtime
@@ -258,9 +293,10 @@ public static void test() throws AlbatrossErr {
 - **SDK Interception**: Override or extend third-party SDK behavior
 - **Binder Hook**:Easy for Multi-Instance Software Development.
 - **Reflection**:High-performance reflection library alternatives
+- **Code analysis**:Tracking and analyzing the running logic through instructions
 
 ##  Future Plans
-Potential features include Java instruction hooking, Java code tracing, dynamic hooking (where a single method can hook methods from multiple classes), call chain hooking, and unhooking capabilities. However, due to resource limitations, the implementation of these features will be prioritized based on user feedback.
+Potential features include ~~Java instruction hooking~~, Java code tracing, dynamic hooking (where a single method can hook methods from multiple classes), call chain hooking, and unhooking capabilities. However, due to resource limitations, the implementation of these features will be prioritized based on user feedback.
 More tools and documentation will follow. Stay tuned for updates on `albatross-server`, `albatross-core`,`albatross-manager` and more!
 
 
