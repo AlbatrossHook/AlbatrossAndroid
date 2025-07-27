@@ -25,6 +25,7 @@ import static qing.albatross.annotation.ExecOption.DECOMPILE;
 import static qing.albatross.annotation.ExecOption.JIT_OPTIMIZED;
 import static qing.albatross.annotation.ExecOption.NATIVE_CODE;
 import static qing.albatross.annotation.ExecOption.RECOMPILE_OPTIMIZED;
+import static qing.albatross.core.InstructionListener.hookInstructionNative;
 import static qing.albatross.reflection.ReflectUtils.getArgumentTypesFromString;
 
 import android.annotation.SuppressLint;
@@ -422,6 +423,23 @@ public final class Albatross {
 
   private synchronized static native int backupAndHookNative(Object target, Method hook, Method backup, int targetExecMode, int hookerExecMode);
 
+
+  public static InstructionListener hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionCallback callback) {
+    InstructionListener listener = new InstructionListener();
+    if (Modifier.isStatic(member.getModifiers())) {
+      ensureClassInitialized(member.getDeclaringClass());
+    }
+    long listenerId = hookInstructionNative(member, minDexPc, maxDexPc, listener);
+    if (listenerId > 4096) {
+      listener.listenerId = listenerId;
+      listener.callback = callback;
+      listener.member = member;
+      return listener;
+    }
+    return null;
+  }
+
+
   private synchronized static native int unBackupNative(Method backup);
 
   private synchronized static native int backupNative(Object target, Method backup, int execMode);
@@ -457,10 +475,10 @@ public final class Albatross {
     int r = 0;
     for (Method method : methods) {
       if ((runMode = method.getAnnotation(RunMode.class)) != null) {
-        if (compileMethod(method, runMode.value()))
+        if (setMethodExecMode(method, runMode.value()))
           r += 1;
       } else {
-        if (compileMethod(method, compileOption))
+        if (setMethodExecMode(method, compileOption))
           r += 1;
       }
     }
@@ -470,10 +488,10 @@ public final class Albatross {
   private static native int compileClassNative(Class<?> clazz, int execMode);
 
   public static boolean compileMethod(Member method) {
-    return compileMethod(method, NATIVE_CODE);
+    return setMethodExecMode(method, NATIVE_CODE);
   }
 
-  public static boolean compileMethod(Member method, int execMode) {
+  public static boolean setMethodExecMode(Member method, int execMode) {
     if (containsFlags(FLAG_NO_COMPILE))
       return false;
     int compileResult = compileMethodNative(method, execMode);
@@ -592,7 +610,8 @@ public final class Albatross {
             ensureClassInitialized = ensureClassInitializedVisibly;
           }
           registerMethodNative(ensureClassInitialized, Albatross.class.getDeclaredMethod("onClassInit", Class.class),
-              Albatross.class.getDeclaredMethod("appendLoader", ClassLoader.class), Albatross.class.getDeclaredMethod("checkMethodReturn", Set.class, Object.class, Method.class));
+              Albatross.class.getDeclaredMethod("appendLoader", ClassLoader.class), Albatross.class.getDeclaredMethod("checkMethodReturn", Set.class, Object.class, Method.class),
+              InstructionListener.class.getDeclaredMethod("onEnter", Object.class, int.class, long.class));
           int sdkInt = Build.VERSION.SDK_INT;
           if (sdkInt > 28 && sdkInt < 35) {
             Class<?> Reflection = Class.forName("sun.reflect.Reflection");
@@ -947,7 +966,7 @@ public final class Albatross {
   private static int defaultHookerBackupExecMode;
   private static int defaultTargetExecMode;
 
-  public static void setCompileConfiguration(int targetExecMode, int hookerExecMode) {
+  public static void setExecConfiguration(int targetExecMode, int hookerExecMode) {
     if (containsFlags(FLAG_NO_COMPILE))
       defaultHookerBackupExecMode = INTERPRETER;
     else
@@ -960,10 +979,10 @@ public final class Albatross {
     defaultHookerBackupExecMode = INTERPRETER;
   }
 
-  public static void setCompileConfiguration(int targetExecMode, int hookerExecMode, int compile_hooker_backup) {
+  public static void setExecConfiguration(int targetExecMode, int hookerExecMode, int hookerBackupExec) {
     defaultTargetExecMode = targetExecMode;
     defaultHookerExecMode = hookerExecMode;
-    defaultHookerBackupExecMode = compile_hooker_backup | DECOMPILE;
+    defaultHookerBackupExecMode = hookerBackupExec | DECOMPILE;
   }
 
 
@@ -1089,8 +1108,8 @@ public final class Albatross {
             }
             if (backupField(dependencies, targetField, field, targetType)) {
               success_count += 1;
-              hookerBackupDefaultExecOption &= ~AOT;
-              hookerBackupDefaultExecOption |= INTERPRETER;
+              hookerDefaultExecOption &= ~AOT;
+              hookerDefaultExecOption |= INTERPRETER;
             }
           } catch (NoSuchFieldException | FieldException e) {
             if (fieldRef.required())
@@ -1800,7 +1819,7 @@ public final class Albatross {
 
   private static final native int initMethodNative(Method initNativeMethod, Method method2, int accessFlags, Class<?> clz);
 
-  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck);
+  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter);
 
   //---------------------------------
 

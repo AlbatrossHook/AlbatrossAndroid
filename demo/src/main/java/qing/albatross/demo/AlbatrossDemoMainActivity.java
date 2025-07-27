@@ -21,6 +21,7 @@ import java.util.Map;
 import qing.albatross.annotation.ExecOption;
 import qing.albatross.annotation.MethodBackup;
 import qing.albatross.core.Albatross;
+import qing.albatross.core.InstructionListener;
 import qing.albatross.demo.android.ActivityH;
 import qing.albatross.demo.android.HandlerHook;
 import qing.albatross.demo.server.DemoServer;
@@ -177,6 +178,44 @@ public class AlbatrossDemoMainActivity extends Activity {
 
   static int callerCount = 0;
 
+
+  /**
+   * .registers 7
+   * <p>
+   * .param p1, "view" # Landroid/view/View;
+   * <p>
+   * .line 180
+   * 00003c44: 7100 b700 0000          0000: invoke-static       {}, Lqing/albatross/core/Albatross;->getCallerClass()Ljava/lang/Class; # method@00b7
+   * 00003c4a: 0c00                    0003: move-result-object  v0
+   * .line 181
+   * .local v0, "caller":Ljava/lang/Class;, "Ljava/lang/Class<*>;"
+   * 00003c4c: 5451 2d00               0004: iget-object         v1, p0, Lqing/albatross/demo/AlbatrossDemoMainActivity;->textView:Landroid/widget/TextView; # field@002d
+   * 00003c50: 2202 3100               0006: new-instance        v2, Ljava/lang/StringBuilder; # type@0031
+   * 00003c54: 7010 2600 0200          0008: invoke-direct       {v2}, Ljava/lang/StringBuilder;-><init>()V # method@0026
+   * 00003c5a: 1a03 c301               000b: const-string        v3, "caller:" # string@01c3
+   * 00003c5e: 6e20 2a00 3200          000d: invoke-virtual      {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder; # method@002a
+   * 00003c64: 0c02                    0010: move-result-object  v2
+   * 00003c66: 6e10 1800 0000          0011: invoke-virtual      {v0}, Ljava/lang/Class;->getName()Ljava/lang/String; # method@0018
+   * 00003c6c: 0c03                    0014: move-result-object  v3
+   * 00003c6e: 6e20 2a00 3200          0015: invoke-virtual      {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder; # method@002a
+   * 00003c74: 0c02                    0018: move-result-object  v2
+   * 00003c76: 1a03 1400               0019: const-string        v3, ":" # string@0014
+   * 00003c7a: 6e20 2a00 3200          001b: invoke-virtual      {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder; # method@002a
+   * 00003c80: 0c02                    001e: move-result-object  v2
+   * 00003c82: 6003 2900               001f: sget                v3, Lqing/albatross/demo/AlbatrossDemoMainActivity;->callerCount:I # field@0029
+   * 00003c86: d804 0301               0021: add-int/lit8        v4, v3, 0x1
+   * 00003c8a: 6704 2900               0023: sput                v4, Lqing/albatross/demo/AlbatrossDemoMainActivity;->callerCount:I # field@0029
+   * 00003c8e: 6e20 2700 3200          0025: invoke-virtual      {v2, v3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder; # method@0027
+   * 00003c94: 0c02                    0028: move-result-object  v2
+   * 00003c96: 6e10 2c00 0200          0029: invoke-virtual      {v2}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String; # method@002c
+   * 00003c9c: 0c02                    002c: move-result-object  v2
+   * 00003c9e: 6e20 0c00 2100          002d: invoke-virtual      {v1, v2}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V # method@000c
+   * .line 182
+   * .end local v0 # "caller":Ljava/lang/Class;
+   * 00003ca4: 0e00                    0030: return-void
+   */
+
+
   public void getCaller(View view) {
     Class<?> caller = Albatross.getCallerClass();
     textView.setText("caller:" + caller.getName() + ":" + callerCount++);
@@ -230,8 +269,9 @@ public class AlbatrossDemoMainActivity extends Activity {
   }
 
   public void CompileO(View view) {
-    Albatross.setCompileConfiguration(ExecOption.JIT_OPTIMIZED, ExecOption.JIT_OPTIMIZED, ExecOption.RECOMPILE_OPTIMIZED);
+    Albatross.setExecConfiguration(ExecOption.JIT_OPTIMIZED, ExecOption.JIT_OPTIMIZED, ExecOption.RECOMPILE_OPTIMIZED);
   }
+
 
   public void infer(View view) throws AlbatrossErr {
     ClassInfer.test(true);
@@ -245,6 +285,34 @@ public class AlbatrossDemoMainActivity extends Activity {
     Albatross.hookClass(TestMain.TestMainH.class);
     TestMain testMain = new TestMain(2, 2);
     testMain.testCall(3);
+  }
+
+  InstructionListener listener = null;
+
+  public void instruction(View view) throws NoSuchMethodException {
+    if (listener == null) {
+      Method getCaller = AlbatrossDemoMainActivity.class.getDeclaredMethod("getCaller", View.class);
+      listener = Albatross.hookInstruction(getCaller, 0, 10, (method, self, dexPc, invocationContext) -> {
+        assert dexPc <= 10;
+        assert dexPc >= 0;
+        assert method == getCaller;
+        assert self == AlbatrossDemoMainActivity.this;
+        assert invocationContext.NumberOfVRegs() == 7;
+        Albatross.log("onEnter:" + dexPc);
+        Object receiver = invocationContext.GetParamReference(0);
+        assert receiver == self;
+        Object v = invocationContext.GetParamReference(1);
+        assert (v instanceof View);
+        if (dexPc == 4) {
+//          00003c44: 7100 b700 0000          0000: invoke-static       {}, Lqing/albatross/core/Albatross;->getCallerClass()Ljava/lang/Class; # method@00b7
+//          00003c4a: 0c00                    0003: move-result-object  v0
+          invocationContext.SetVRegReference(0, AlbatrossDemoMainActivity.class);
+        }
+      });
+    } else {
+      listener.unHook();
+      listener = null;
+    }
   }
 
 

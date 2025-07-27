@@ -137,6 +137,12 @@
                 android:onClick="testMain"
                 android:text="testMain" />
 
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="instruction"
+                android:text="instruction" />
+
 
         </GridLayout>
 
