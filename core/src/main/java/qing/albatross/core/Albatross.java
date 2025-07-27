@@ -430,7 +430,7 @@ public final class Albatross {
       ensureClassInitialized(member.getDeclaringClass());
     }
     long listenerId = hookInstructionNative(member, minDexPc, maxDexPc, listener);
-    if (listenerId > 4096) {
+    if (listenerId > 4096 || listenerId < 0) {
       listener.listenerId = listenerId;
       listener.callback = callback;
       listener.member = member;

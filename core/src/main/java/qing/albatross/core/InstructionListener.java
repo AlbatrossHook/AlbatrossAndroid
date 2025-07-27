@@ -24,13 +24,13 @@ import java.lang.reflect.Modifier;
 public class InstructionListener {
   Member member;
   InstructionCallback callback;
-  long listenerId;
+  long listenerId = 0;
   int numberVRegs = -1;
   int first_arg_reg = -1;
 
 
   public synchronized void unHook() {
-    if (listenerId > 4096) {
+    if (listenerId != 0) {
       unHookInstructionNative(listenerId);
       listenerId = 0;
     }
