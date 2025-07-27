@@ -1,3 +1,6 @@
+version 1.0.3
+ - Supports hooking of instructions.
+
 version 1.0.2
  - Support backing up the fields of the parent class and setting possible aliases for the fields.
  - The specific type of a field can be determined by passing objects.
