@@ -75,6 +75,7 @@ import qing.albatross.exception.CheckParameterTypesResult;
 import qing.albatross.exception.FieldException;
 import qing.albatross.exception.FieldExceptionReason;
 import qing.albatross.exception.FindMethodException;
+import qing.albatross.exception.HookInterfaceErr;
 import qing.albatross.exception.NotNativeBackupErr;
 import qing.albatross.exception.RedundantFieldErr;
 import qing.albatross.exception.RedundantMethodErr;
@@ -1028,6 +1029,8 @@ public final class Albatross {
       }
     }
     if (defaultClass != null) {
+      if (defaultClass.isInterface())
+        throw new HookInterfaceErr(defaultClass);
       if (!(defaultClass.getClassLoader() instanceof BaseDexClassLoader)) {
         addToVisit(defaultClass);
       }

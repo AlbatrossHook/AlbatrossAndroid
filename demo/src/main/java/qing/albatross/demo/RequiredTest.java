@@ -5,6 +5,7 @@ import qing.albatross.annotation.MethodBackup;
 import qing.albatross.annotation.TargetClass;
 import qing.albatross.core.Albatross;
 import qing.albatross.exception.AlbatrossErr;
+import qing.albatross.exception.HookInterfaceErr;
 import qing.albatross.exception.RequiredClassErr;
 import qing.albatross.exception.RequiredFieldErr;
 import qing.albatross.exception.RequiredMethodErr;
@@ -50,16 +51,28 @@ public class RequiredTest {
     private native long demo();
   }
 
+  interface F {
+    int ping();
+  }
+
   static void test(boolean hook) {
-    if(!hook)
+    if (!hook)
       return;
+
+    try {
+      Albatross.hookClass(RequiredTest.class, F.class);
+      assert false;
+    } catch (AlbatrossErr e) {
+      assert e instanceof HookInterfaceErr;
+      assert ((HookInterfaceErr) e).targetClass == F.class;
+    }
     try {
       Albatross.hookClass(A.class);
       throw new RuntimeException("should not reach there");
     } catch (AlbatrossErr e) {
       assert e instanceof RequiredClassErr;
     }
-    if(Albatross.isFieldEnable()){
+    if (Albatross.isFieldEnable()) {
       try {
         Albatross.hookClass(AH.class);
         throw new RuntimeException("should not reach there");

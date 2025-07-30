@@ -16,13 +16,12 @@
 
 package qing.albatross.exception;
 
-import java.lang.reflect.Field;
+public class HookInterfaceErr extends AlbatrossErr {
+  public Class<?> targetClass;
 
-public class RedundantFieldErr extends HookerStructErr {
-  public Field field;
 
-  public RedundantFieldErr(Field f) {
-    super("hooker must not have useless instance field :" + f);
-    this.field = f;
+  public HookInterfaceErr(Class<?> targetClass) {
+    super("can not hook interface: " + targetClass);
+    this.targetClass = targetClass;
   }
 }
