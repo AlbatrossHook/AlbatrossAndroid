@@ -319,15 +319,7 @@ public final class Albatross {
       checkMethodReturn(currentDependencies, target, hook);
     if (check)
       checkCompatibleMethods(null, target, hook, "Hook");
-    boolean doTransaction = dependencies == null && !currentDependencies.isEmpty();
-    if (doTransaction) {
-      transactionBegin();
-    }
     int result = backupAndHookNative(target, hook, backup, targetExecMode, hookerExecMode);
-    if (doTransaction) {
-      hookDependency(currentDependencies);
-      transactionEnd(true);
-    }
     if (result == HookResult.HOOK_SUCCESS) {
       return true;
     }
@@ -366,15 +358,7 @@ public final class Albatross {
       checkMethodReturn(currentDependencies, target, backup);
     if (check)
       checkCompatibleMethods(currentDependencies, target, backup, "Backup");
-    boolean doTransaction = dependencies == null && !currentDependencies.isEmpty();
-    if (doTransaction) {
-      transactionBegin();
-    }
     int result = backupNative(target, backup, execMode);
-    if (doTransaction) {
-      hookDependency(currentDependencies);
-      transactionEnd(true);
-    }
     if (result == HookResult.HOOK_SUCCESS) {
       return true;
     }
@@ -664,7 +648,6 @@ public final class Albatross {
           transactionEnd(true);
         }
         pendingMap = new HashMap<>();
-
         return true;
       } else {
         initStatus |= STATUS_INIT_FAIL | FLAG_FIELD_BACKUP_BAN;
@@ -783,7 +766,7 @@ public final class Albatross {
       backupAndHook(Albatross.class.getDeclaredMethod("log", String.class), infoLogger, null);
       backupAndHook(Albatross.class.getDeclaredMethod("log", String.class, Throwable.class), errLogger, null);
       transactionEnd(true);
-    } catch (Exception e) {
+    } catch (Throwable e) {
       transactionEnd(false);
       Albatross.log("resetLogger", e);
     }

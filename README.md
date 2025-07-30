@@ -321,4 +321,4 @@ See [LICENSE](LICENSE) for details.
 
 - [Annotations](docs/annotatin_reference.md) — Full list of hooking and configuration annotations
 - [API Reference](#) — Public methods and usage
-- [Exception Handling](#) — Error types and recovery strategies
+- [Exception Handling](docs/exception_documentation.md) — Error types and fix strategies
