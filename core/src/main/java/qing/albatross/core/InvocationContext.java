@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-
 package qing.albatross.core;
+
+import java.lang.reflect.Modifier;
 
 public class InvocationContext {
   private final long invocationContext;
@@ -111,6 +112,12 @@ public class InvocationContext {
     return InstructionListener.GetVRegReference(invocationContext, listener.getArgReg(invocationContext, i));
   }
 
+  public Object getThis() {
+    if (Modifier.isStatic(listener.member.getModifiers()))
+      return null;
+    return getParamBool(0);
+  }
+
 
   public int setVRegBool(int i, boolean val) {
     assert i < numberOfVRegs();
@@ -159,11 +166,11 @@ public class InvocationContext {
 
 
   public int setParamBoolean(int i, boolean val) {
-    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val ? 1 : 0) ;
+    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val ? 1 : 0);
   }
 
   public int setParamChar(int i, char val) {
-    return  InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
   }
 
   public int setParamByte(int i, byte val) {
@@ -171,7 +178,7 @@ public class InvocationContext {
   }
 
   public int setParamShort(int i, short val) {
-    return  InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
   }
 
 
