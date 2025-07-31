@@ -1,3 +1,8 @@
+version 1.0.4
+ - Throw an exception when the target class is an interface
+ - Improve the methods related to the instruction hook
+ - Transaction optimization and entrypoint judgment of arm methods
+
 version 1.0.3
  - Supports hooking of instructions.
 
