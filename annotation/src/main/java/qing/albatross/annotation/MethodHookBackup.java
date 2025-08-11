@@ -28,13 +28,14 @@ import java.lang.annotation.Target;
 public @interface MethodHookBackup {
   String[] value() default {};
   String[] name() default {};
-  boolean isStatic() default false;
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
   int hookerExec() default DEFAULT_OPTION;
   int targetExec() default DEFAULT_OPTION;
+  boolean isStatic() default false;
   boolean required() default false;
-  int option() default DefOption.DEFAULT;
-  int minSdk() default 0;
-  int maxSdk() default 0;
+  byte option() default DefOption.DEFAULT;
+  byte minSdk() default 0;
+  byte maxSdk() default 0;
+  byte callWay() default CallWay.CURRENT;
 }

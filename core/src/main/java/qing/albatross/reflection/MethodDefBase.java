@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.reflection;
 
 import java.lang.reflect.Field;
@@ -24,10 +22,11 @@ import java.util.Set;
 
 import qing.albatross.annotation.ArgumentType;
 import qing.albatross.annotation.ArgumentTypeName;
+import qing.albatross.annotation.ByName;
 import qing.albatross.core.Albatross;
 
 class MethodDefBase extends ReflectionBase {
-  public Method method;
+  public final Method method;
 
   public MethodDefBase(Object target) {
     this.method = (Method) target;
@@ -36,20 +35,22 @@ class MethodDefBase extends ReflectionBase {
 
   public MethodDefBase(Set<Class<?>> dependencies, Class<?> cls, Field field) throws Exception {
     String fieldName = field.getName();
-    ArgumentType mi = field.getAnnotation(ArgumentType.class);
-    ArgumentTypeName mri;
+    ArgumentType argumentType = field.getAnnotation(ArgumentType.class);
+    ArgumentTypeName typeName;
     ClassLoader classLoader = cls.getClassLoader();
-    if (mi != null) {
-      Class<?>[] parameterTypes = mi.value();
+    if (argumentType != null) {
+      Class<?>[] parameterTypes = argumentType.value();
       Albatross.checkParameterTypes(dependencies, parameterTypes, null, classLoader);
-      if (mi.exactSearch())
+      if (argumentType.exactSearch())
         this.method = ReflectUtils.findMethod(cls, fieldName, parameterTypes);
       else
         this.method = ReflectUtils.findDeclaredMethodWithSubArgType(cls, fieldName, parameterTypes);
-    } else if ((mri = field.getAnnotation(ArgumentTypeName.class)) != null) {
-      String[] classes = mri.value();
+    } else if ((typeName = field.getAnnotation(ArgumentTypeName.class)) != null) {
+      String[] classes = typeName.value();
       Class<?>[] paramClasses = ReflectUtils.getArgumentTypesFromString(classes, classLoader, false);
       this.method = ReflectUtils.findMethod(cls, fieldName, paramClasses);
+    } else if (field.getAnnotation(ByName.class) != null) {
+      this.method = ReflectUtils.findDeclaredMethodByName(cls, fieldName);
     } else {
       this.method = ReflectUtils.findMethod(cls, fieldName);
     }

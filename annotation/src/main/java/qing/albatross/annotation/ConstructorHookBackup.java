@@ -31,8 +31,9 @@ public @interface ConstructorHookBackup {
   Class<?> targetClass() default TargetClass.class;
   int hookerExec() default DEFAULT_OPTION;
   int targetExec() default DEFAULT_OPTION;
+  byte option() default DefOption.DEFAULT;
   boolean required() default false;
-  int option() default DefOption.DEFAULT;
-  int minSdk() default 0;
-  int maxSdk() default 0;
+  byte minSdk() default 0;
+  byte maxSdk() default 0;
+  byte callWay() default CallWay.CURRENT;
 }

@@ -30,7 +30,8 @@ public @interface ConstructorHook {
   Class<?> targetClass() default TargetClass.class;
   int hookerExec() default DEFAULT_OPTION;
   boolean required() default false;
-  int option() default DefOption.DEFAULT;
-  int minSdk() default 0;
-  int maxSdk() default 0;
+  byte option() default DefOption.DEFAULT;
+  byte minSdk() default 0;
+  byte maxSdk() default 0;
 }
+

@@ -95,7 +95,7 @@ public class InstructionListener {
   static native void SetVRegReference(long invocationContext, int i, Object val);
 
 
-  public void onEnter(Object self, int dexPc, long invocationContext) {
+  private void onEnter(Object self, int dexPc, long invocationContext) {
     callback.onEnter(member, self, dexPc, new InvocationContext(invocationContext, this));
   }
 }

@@ -17,11 +17,15 @@
 
 package qing.albatross.reflection;
 
+import android.util.ArrayMap;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Map;
 
+import qing.albatross.annotation.Alias;
 import qing.albatross.core.Albatross;
 import qing.albatross.exception.AlbatrossErr;
 import qing.albatross.exception.CheckParameterTypesResult;
@@ -44,20 +48,52 @@ public class ReflectUtils {
     throw new NoSuchMethodException("Method " + name + " with parameters " + Arrays.asList(parameterTypes) + " not found in " + clazz);
   }
 
+
+  public static Method findDeclaredMethodByName(Class<?> clazz, String name) throws NoSuchMethodException {
+    Method[] methods = clazz.getDeclaredMethods();
+    for (Method method : methods) {
+      Alias alias = method.getAnnotation(Alias.class);
+      if (alias != null) {
+        if (name.equals(alias.value()))
+          return method;
+        continue;
+      }
+      if (method.getName().equals(name)) {
+        return method;
+      }
+    }
+    throw new NoSuchMethodException("Method " + name + " not found in " + clazz);
+  }
+
+
   public static Method findDeclaredMethodWithType(Class<?> clazz, String name, Class<?>[] argTypes, CheckParameterTypesResult checkParameterTypesResult) throws AlbatrossErr {
     Class<?>[] subArgTypes = checkParameterTypesResult.mParameterSubTypes;
     Method[] methods = clazz.getDeclaredMethods();
+    byte[] primMatch = checkParameterTypesResult.primMatch;
     int expectParamCount = argTypes.length;
+    Method excludeMethod = checkParameterTypesResult.excludeMethod;
     for (Method method : methods) {
-      if (method.getName().equals(name) && method.getParameterCount() == expectParamCount) {
+      if (method.getParameterCount() == expectParamCount) {
+        if (!method.getName().equals(name)) {
+          Alias alias = method.getAnnotation(Alias.class);
+          if (alias == null || !name.equals(alias.value()))
+            continue;
+        }
+        if (method.equals(excludeMethod))
+          continue;
         Class<?>[] parameterTypes = method.getParameterTypes();
         int i = 0;
         for (; i < expectParamCount; i++) {
           int pIdx = i + checkParameterTypesResult.offset;
           Class<?> subClz = subArgTypes[pIdx];
           if (subClz != null) {
-            if (!subClz.isAssignableFrom(parameterTypes[i]))
-              break;
+            if (!subClz.isAssignableFrom(parameterTypes[i])) {
+              if (primMatch == null)
+                break;
+              byte size = primMatch[pIdx];
+              if (size == 0 || size != getPrimSize(parameterTypes[i]))
+                break;
+            }
           } else if (parameterTypes[i] != argTypes[i])
             break;
         }
@@ -259,6 +295,25 @@ public class ReflectUtils {
       }
     }
     return argTypes;
+  }
+
+  static Map<Class<?>, Byte> sizeTables = new ArrayMap<>();
+
+  static {
+    sizeTables.put(boolean.class, (byte) 4);
+    sizeTables.put(char.class, (byte) 4);
+    sizeTables.put(byte.class, (byte) 4);
+    sizeTables.put(short.class, (byte) 4);
+    sizeTables.put(int.class, (byte) 4);
+//    sizeTables.put(long.class, (byte) 8);
+  }
+
+  public static byte getPrimSize(Class<?> clz) {
+    return sizeTables.getOrDefault(clz, (byte) 0);
+  }
+
+  public static boolean isPrimMatch(Class<?> clz, Class<?> clz2) {
+    return sizeTables.getOrDefault(clz, (byte) 0) == 4 && sizeTables.getOrDefault(clz2, (byte) 0) == 4;
   }
 
 

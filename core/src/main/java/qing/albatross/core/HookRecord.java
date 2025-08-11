@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.core;
 
 import java.lang.reflect.Member;
@@ -27,5 +24,6 @@ public class HookRecord {
   Method hook;
   int targetExec;
   int hookerExec;
+  byte backupWay;
   boolean checkMethSign =false;
 }

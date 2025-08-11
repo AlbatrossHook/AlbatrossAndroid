@@ -30,8 +30,9 @@ public @interface StaticMethodBackup {
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
   int targetExec() default DEFAULT_OPTION;
+  byte option() default DefOption.DEFAULT;
   boolean required() default false;
-  int option() default DefOption.DEFAULT;
-  int minSdk() default 0;
-  int maxSdk() default 0;
+  byte minSdk() default 0;
+  byte maxSdk() default 0;
+  byte callWay() default CallWay.CURRENT;
 }

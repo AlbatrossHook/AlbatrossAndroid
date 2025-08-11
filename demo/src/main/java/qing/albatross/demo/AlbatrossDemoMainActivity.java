@@ -281,10 +281,12 @@ public class AlbatrossDemoMainActivity extends Activity {
     FieldTest.test(true);
   }
 
-  public void testMain(View view) throws AlbatrossException, NoSuchMethodException {
+  public void testMain(View view) throws AlbatrossException {
     Albatross.hookClass(TestMain.TestMainH.class);
     TestMain testMain = new TestMain(2, 2);
+    //to short,arm may crash
     testMain.testCall(3);
+    assert testMain.z == 5;
   }
 
   InstructionListener listener = null;

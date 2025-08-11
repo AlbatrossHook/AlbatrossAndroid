@@ -13,20 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package qing.albatross.exception;
 
-package qing.albatross.annotation;
+public class MirrorExtendErr extends HookerStructErr {
+  public Class<?> hooker;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
 
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.FIELD)
-public @interface FieldRef {
-  String[] value() default {};
-  Class<?> targetClass() default TargetClass.class;
-  String[] className() default {};
-  boolean required() default false;
-  byte option() default DefOption.DEFAULT;
+  public MirrorExtendErr(Class<?> hooker) {
+    super("The mirror class " + hooker + " cannot inherit other classes that are not object classes");
+    this.hooker = hooker;
+  }
 }

@@ -27,12 +27,13 @@ import java.lang.annotation.Target;
 public @interface MethodBackup {
   String[] value() default {};
   String[] name() default {};
-  boolean isStatic() default false;
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
   int targetExec() default DEFAULT_OPTION;
+  boolean isStatic() default false;
+  byte option() default DefOption.DEFAULT;
   boolean required() default false;
-  int option() default DefOption.DEFAULT;
-  int minSdk() default 0;
-  int maxSdk() default 0;
+  byte minSdk() default 0;
+  byte maxSdk() default 0;
+  byte callWay() default CallWay.CURRENT;
 }

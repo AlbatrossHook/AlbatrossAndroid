@@ -31,8 +31,8 @@ public @interface StaticMethodHook {
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
   int hookerExec() default DEFAULT_OPTION;
+  byte option() default DefOption.DEFAULT;
   boolean required() default false;
-  int option() default DefOption.DEFAULT;
-  int minSdk() default 0;
-  int maxSdk() default 0;
+  byte minSdk() default 0;
+  byte maxSdk() default 0;
 }

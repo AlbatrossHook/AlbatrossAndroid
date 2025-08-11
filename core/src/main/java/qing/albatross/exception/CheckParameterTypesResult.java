@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.exception;
+
+import java.lang.reflect.Method;
 
 public class CheckParameterTypesResult {
   public Class<?>[] mParameterSubTypes = null;
   public Class<?>[] hookerClasses = null;
+  public byte[] primMatch = null;
   public int offset = 0;
+  public Method excludeMethod;
 }
