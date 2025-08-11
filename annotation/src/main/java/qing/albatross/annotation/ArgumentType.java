@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *

@@ -1,3 +1,10 @@
+version 1.0.5
+- Improve the execution speed of the instruction hook by only listening when the target method is executing.
+- Hooker is not necessarily an image class, it can be the target class itself.
+- Primitive types can also be fuzzy matched.
+- Can search for a method by its name. Support commenting aliases for methods, so that even after confusion, the target method can still be found.
+- Support multiple backups of a method and define the call way for the backup method
+
 version 1.0.4
  - Throw an exception when the target class is an interface
  - Improve the methods related to the instruction hook
