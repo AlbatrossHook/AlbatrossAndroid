@@ -4,6 +4,7 @@ import static qing.albatross.demo.TestMain.testGc;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Debug;
 import android.view.View;
@@ -317,6 +318,23 @@ public class AlbatrossDemoMainActivity extends Activity {
       listener.unHook();
       listener = null;
     }
+  }
+
+
+  InstructionListener onCreate = null;
+
+  public void hookOnCreate(View view) throws NoSuchMethodException {
+    if (onCreate == null) {
+      Method getCaller = Activity.class.getDeclaredMethod("onCreate", Bundle.class);
+      onCreate = Albatross.hookInstruction(getCaller, 0, 100, (method, self, dexPc, invocationContext) -> {
+        assert self.getClass().equals(SecondActivity.class);
+        Albatross.log("hookOnCreate onEnter:" + dexPc + " this:" + self);
+      });
+    } else {
+      onCreate.unHook();
+      onCreate = null;
+    }
+    startActivity(new Intent(this, SecondActivity.class));
   }
 
 

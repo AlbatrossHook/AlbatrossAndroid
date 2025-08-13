@@ -14,58 +14,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <Button
-            android:onClick="debug"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="debug" />
-
-        <Button
-            android:onClick="crash"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="crash" />
-
-        <Button
-            android:onClick="gcTest"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="gc" />
-
-        <Button
-            android:onClick="loadDex"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="dex" />
-        <Button
-            android:onClick="compile"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="compile" />
-
-        <Button
-            android:onClick="init"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="init" />
-
-
-        <Button
-            android:onClick="server"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="server" />
-        <Button
-            android:onClick="broadcast"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="broadcast" />
-
-        <Button
-            android:onClick="broadcastLong"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="broadcastLong" />
 
 
     </GridLayout>

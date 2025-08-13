@@ -716,9 +716,13 @@ public final class Albatross {
           classReturnTypeMap.put(long.class, ReturnType.LONG);
           classReturnTypeMap.put(double.class, ReturnType.DOUBLE);
           initClassLoader();
+          Albatross.hookClassInternal(MethodCallHook.Image.class, MethodCallHook.class.getClassLoader(), MethodCallHook.class, null);
         } finally {
           transactionEnd(true);
         }
+        registerHookCallback(new Method[]{MethodCallHook.Image.callVoid.method, MethodCallHook.Image.callBool.method, MethodCallHook.Image.callChar.method, MethodCallHook.Image.callByte.method,
+            MethodCallHook.Image.callShort.method, MethodCallHook.Image.callInt.method, MethodCallHook.Image.callFloat.method, MethodCallHook.Image.callLong.method,
+            MethodCallHook.Image.callDouble.method, MethodCallHook.Image.callObject.method});
         return true;
       } else {
         initStatus |= STATUS_INIT_FAIL | FLAG_FIELD_BACKUP_BAN;
@@ -1279,7 +1283,10 @@ public final class Albatross {
               expectClass = newFieldDef.getExpectType();
             if (expectClass != null && expectClass != Object.class) {
               Class<?> realType = newFieldDef.getRealType();
-              if ((!expectClass.isAssignableFrom(realType)) && !(realType == void.class && expectClass == Void.class)) {
+              if (realType.isPrimitive() && !expectClass.isPrimitive()) {
+                realType = primBoxMap.get(realType);
+              }
+              if ((!expectClass.isAssignableFrom(realType))) {
                 if (!checkTargetClass(dependencies, expectClass, realType)) {
                   log(String.format("wrong filed %s type,expect %s get %s", field.getName(), expectClass.getName(), realType.getName()));
                   continue;
@@ -1788,6 +1795,7 @@ public final class Albatross {
   }
 
   private static Map<Class<? extends ReflectionBase>, FieldConfig> fieldClsMap;
+  private static Map<Class<?>, Class<?>> primBoxMap;
 
   static class FieldConfig {
     Constructor<? extends ReflectionBase> constructor;
@@ -1853,6 +1861,16 @@ public final class Albatross {
     } catch (Exception e) {
       Albatross.log("initField", e);
     }
+    primBoxMap = new ArrayMap<>();
+    primBoxMap.put(void.class, Void.class);
+    primBoxMap.put(boolean.class, Boolean.class);
+    primBoxMap.put(char.class, Character.class);
+    primBoxMap.put(byte.class, Byte.class);
+    primBoxMap.put(short.class, Short.class);
+    primBoxMap.put(int.class, Integer.class);
+    primBoxMap.put(float.class, Float.class);
+    primBoxMap.put(long.class, Long.class);
+    primBoxMap.put(double.class, Double.class);
     try {
       Field field = _$.class.getDeclaredField("s1");
       Field field2 = _$.class.getDeclaredField("s2");
@@ -1980,9 +1998,13 @@ public final class Albatross {
 
   private static final native int initMethodNative(Method initNativeMethod, Method method2, int accessFlags, Class<?> clz);
 
+  //---------------------------------
+
   private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter);
 
-  //---------------------------------
+  private static native void registerHookCallback(Method[] methods/*Method callVoid, Method callBool, Method callChar, Method callByte, Method callShort, Method callInt, Method callFloat,
+                                                  Method callLong, Method callDouble, Method callObject*/);
+
 
   public static final String TAG = Albatross.class.getSimpleName();
 

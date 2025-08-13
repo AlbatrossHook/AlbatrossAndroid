@@ -143,6 +143,12 @@
                 android:onClick="instruction"
                 android:text="instruction" />
 
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="hookOnCreate"
+                android:text="onCreate" />
+
 
         </GridLayout>
 

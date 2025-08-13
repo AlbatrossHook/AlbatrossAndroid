@@ -49,7 +49,8 @@ public class CallFrame {
   }
 
   public int invokeInt() {
-    throw new RuntimeException("not impl");
+    assert callHook.returnType == ReturnType.INT;
+    return MethodCallHook.invokeInt(contextId);
   }
 
   public float invokeFloat() {
