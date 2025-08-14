@@ -33,31 +33,9 @@ import qing.albatross.server.UnixRpcServer;
 
 
 public class AlbatrossDemoMainActivity extends Activity {
-  public static class A {
-    public String isFinishing0() {
-      return "0";
-    }
 
-    public String isFinishing() {
-      return "1";
-    }
-
-    public String isFinishing2() {
-      return "2";
-    }
-  }
-
-  public static class AH {
-    @MethodBackup
-    private native String isFinishing();
-  }
-
-
-  protected boolean isLoad = false;
-
-  protected DemoServer demoServer;
+  static boolean isLoad = false;
   protected TextView textView;
-
 
   public void fixLayout() {
     setContentView(R.layout.activity_albatross_demo_main);
@@ -73,19 +51,25 @@ public class AlbatrossDemoMainActivity extends Activity {
 
   private static native boolean registerAlbatrossLib(Class<?> albatross);
 
+  static void initAlbatross() {
+    if (isLoad)
+      return;
+    isLoad = true;
+    try {
+      System.loadLibrary("api");
+      registerAlbatrossLib(Albatross.class);
+      Albatross.init(0);
+    } catch (Throwable ignore) {
+      Albatross.loadLibrary("albatross_base");
+    }
+    boolean res = Albatross.initRpcClass(UnixRpcServer.class);
+    assert res;
+
+  }
 
   public void load(View view) {
     if (!isLoad) {
-      isLoad = true;
-      try {
-        System.loadLibrary("api");
-        registerAlbatrossLib(Albatross.class);
-        Albatross.init(0);
-      } catch (Throwable ignore) {
-        Albatross.loadLibrary("albatross_base");
-      }
-      boolean res = Albatross.initRpcClass(UnixRpcServer.class);
-      assert res;
+      initAlbatross();
       assert (Albatross.currentApplication() == getApplication());
       return;
     }
@@ -94,50 +78,9 @@ public class AlbatrossDemoMainActivity extends Activity {
     }
   }
 
-  public void server(View view) {
-    String socketPath = "albatross_demo" + Albatross.getRuntimeISA();
-    if (demoServer == null) {
-      demoServer = new DemoServer();
-      assert demoServer.createServer(socketPath, true) != null;
-    }
-    textView.setText("localabstract:" + socketPath);
-  }
-
-  public void broadcast(View view) {
-    if (demoServer == null)
-      server(view);
-    String result = demoServer.broadcast("hello");
-    int sendPrimary = demoServer.sendPrimary("primary", 3);
-    Map<String, Object> map = new HashMap<>();
-    map.put("key", 1);
-    map.put("string", "s value");
-    short sh = demoServer.jsonObject(JsonFormatter.fmt(map), JsonFormatter.fmt(new Object[]{"one", true, 3}));
-    textView.setText("broadcast result:" + result + "\n sendPrimary:" + sendPrimary + "\njsonObject:" + sh);
-  }
-
-  public void broadcastLong(View view) {
-    if (demoServer == null)
-      server(view);
-    byte result = demoServer.broadcastLongArgTest(1.3, "2hello", (byte) 3, 4, 5.2, (byte) 6, "7arg", 8, 9, (byte) 10, 11.2f);
-    textView.setText("broadcast result:" + result);
-  }
-
-  public void broadcastStr(View view) {
-    if (demoServer == null)
-      server(view);
-    byte result = demoServer.sendLongString("{\"permissions\":[\"android.permission.ACCESS_FINE_LOCATION\",\"android.permission.ACCESS_COARSE_LOCATION\",\"android.permission.ACCESS_LOCATION_EXTRA_COMMANDS\"],\"requestId\":-2352445327731730071,\"finish\":false,\"list\":[{\"affectedPermissions\":[\"android.permission.ACCESS_FINE_LOCATION\",\"android.permission.ACCESS_COARSE_LOCATION\"],\"name\":\"android.permission-group.LOCATION\",\"state\":0,\"desc\":\"access this device\\'s location\"}],\"pkg\":\"kaamel.kabox.android.uidemo64\",\"aid\":234938715}");
-    textView.setText("sendLongString:" + result);
-  }
-
-  public void broadcastVoid(View view) {
-    if (demoServer == null)
-      server(view);
-    demoServer.sendNoReturn(12345678902545L);
-    textView.setText("broadcastVoid,subscriberSize:" + demoServer.getSubscriberSize());
-  }
 
   public void crash(View view) {
-    throw new RuntimeException("exception will be caught");
+    throw new RuntimeException("should call load twice,then exception will be caught");
   }
 
   public void gcTest(View view) {
@@ -146,6 +89,7 @@ public class AlbatrossDemoMainActivity extends Activity {
 
 
   public void compile(View view) throws NoSuchMethodException {
+    initAlbatross();
     long isCompile = Albatross.entryPointFromQuickCompiledCode(
         AlbatrossDemoMainActivity.class.getDeclaredMethod(
             "crash", View.class));
@@ -164,15 +108,9 @@ public class AlbatrossDemoMainActivity extends Activity {
     }
   }
 
-  public void virtualCall(View view) throws AlbatrossErr {
-    Albatross.hookClass(AH.class, A.class);
-    AH self = Albatross.convert(new A(), AH.class);
-    Albatross.hookClass(ActivityH.class);
-    ActivityH activityH = Albatross.convert(this, ActivityH.class);
-    textView.setText("isFinished：" + self.isFinishing() + ":" + ActivityH.finish(activityH));
-  }
 
   public void disableLog(View view) {
+    initAlbatross();
     Albatross.disableLog();
     Albatross.log("silence log");
   }
@@ -218,12 +156,14 @@ public class AlbatrossDemoMainActivity extends Activity {
 
 
   public void getCaller(View view) {
+    initAlbatross();
     Class<?> caller = Albatross.getCallerClass();
     textView.setText("caller:" + caller.getName() + ":" + callerCount++);
   }
 
   @SuppressLint("BlockedPrivateApi")
   public void exceptionCreate(View view) {
+    initAlbatross();
     try {
       Method method = StringBuilder.class.getDeclaredMethod("append", String.class);
       textView.setText("append:" + Albatross.entryPointFromQuickCompiledCode(method));
@@ -260,6 +200,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   }
 
   public void handlerHook(View view) throws AlbatrossErr {
+    initAlbatross();
     if (Albatross.hookClass(HandlerHook.class) == Albatross.CLASS_ALREADY_HOOK) {
       RuntimeException testHook = new RuntimeException("testHook");
       textView.setText("testHook throw exception：" + testHook);
@@ -270,19 +211,23 @@ public class AlbatrossDemoMainActivity extends Activity {
   }
 
   public void CompileO(View view) {
+    initAlbatross();
     Albatross.setExecConfiguration(ExecOption.JIT_OPTIMIZED, ExecOption.JIT_OPTIMIZED, ExecOption.RECOMPILE_OPTIMIZED);
   }
 
 
   public void infer(View view) throws AlbatrossErr {
+    initAlbatross();
     ClassInfer.test(true);
   }
 
   public void field(View view) throws AlbatrossErr {
+    initAlbatross();
     FieldTest.test(true);
   }
 
   public void testMain(View view) throws AlbatrossException {
+    initAlbatross();
     Albatross.hookClass(TestMain.TestMainH.class);
     TestMain testMain = new TestMain(2, 2);
     //to short,arm may crash
@@ -293,6 +238,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   InstructionListener listener = null;
 
   public void instruction(View view) throws NoSuchMethodException {
+    initAlbatross();
     if (listener == null) {
       Method getCaller = AlbatrossDemoMainActivity.class.getDeclaredMethod("getCaller", View.class);
       listener = Albatross.hookInstruction(getCaller, 0, 10, (method, self, dexPc, invocationContext) -> {
@@ -324,6 +270,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   InstructionListener onCreate = null;
 
   public void hookOnCreate(View view) throws NoSuchMethodException {
+    initAlbatross();
     if (onCreate == null) {
       Method getCaller = Activity.class.getDeclaredMethod("onCreate", Bundle.class);
       onCreate = Albatross.hookInstruction(getCaller, 0, 100, (method, self, dexPc, invocationContext) -> {
@@ -339,7 +286,7 @@ public class AlbatrossDemoMainActivity extends Activity {
 
 
   public void onResume() {
-    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis() + ",testing by continuously clicking the \"load\" button");
+    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis() + ",testing by continuously clicking the \"load\" button,一定要先注册初始化才能测试");
     super.onResume();
   }
 

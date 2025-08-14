@@ -31,36 +31,6 @@
                 android:onClick="load"
                 android:text="load" />
 
-            <Button
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_columnSpan="1"
-                android:onClick="broadcast"
-                android:text="broadcast" />
-
-            <Button
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:onClick="server"
-                android:text="server" />
-
-            <Button
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:onClick="broadcastLong"
-                android:text="broadcastLong" />
-
-            <Button
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:onClick="broadcastStr"
-                android:text="broadcastStr" />
-
-            <Button
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:onClick="broadcastVoid"
-                android:text="broadcastVoid" />
 
             <Button
                 android:layout_width="wrap_content"
@@ -88,11 +58,6 @@
                 android:onClick="compile"
                 android:text="compile" />
 
-            <Button
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:onClick="virtualCall"
-                android:text="virtualCall" />
 
             <Button
                 android:layout_width="wrap_content"
