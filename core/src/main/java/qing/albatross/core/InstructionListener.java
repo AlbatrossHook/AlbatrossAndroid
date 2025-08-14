@@ -20,6 +20,8 @@ import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
+import qing.albatross.annotation.Alias;
+
 
 public class InstructionListener {
   Member member;
@@ -68,6 +70,8 @@ public class InstructionListener {
     return idx;
   }
 
+  //All these native methods register by Albatross.registerMethodNative
+
   static native long hookInstructionNative(Member member, int minDexPc, int maxDexPc, Object callback);
 
   static native void unHookInstructionNative(long listenerId);
@@ -94,7 +98,7 @@ public class InstructionListener {
 
   static native void SetVRegReference(long invocationContext, int i, Object val);
 
-
+  @Alias("onEnter")
   private void onEnter(Object self, int dexPc, long invocationContext) {
     callback.onEnter(member, self, dexPc, new InvocationContext(invocationContext, this));
   }

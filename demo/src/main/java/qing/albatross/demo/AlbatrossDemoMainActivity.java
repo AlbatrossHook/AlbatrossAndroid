@@ -64,7 +64,6 @@ public class AlbatrossDemoMainActivity extends Activity {
     }
     boolean res = Albatross.initRpcClass(UnixRpcServer.class);
     assert res;
-
   }
 
   public void load(View view) {

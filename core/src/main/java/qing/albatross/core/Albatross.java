@@ -55,7 +55,9 @@ import java.util.Map;
 import java.util.Set;
 
 import dalvik.system.BaseDexClassLoader;
+import qing.albatross.annotation.Alias;
 import qing.albatross.annotation.ArgumentTypeSlot;
+import qing.albatross.annotation.ByName;
 import qing.albatross.annotation.ConstructorBackup;
 import qing.albatross.annotation.ConstructorHook;
 import qing.albatross.annotation.ConstructorHookBackup;
@@ -208,6 +210,7 @@ public final class Albatross {
     return false;
   }
 
+  @Alias("checkMethodReturn")
   private static Set<Class<?>> checkMethodReturn(Set<Class<?>> dependencies, Object original, Method replacement) throws AlbatrossException {
     Class<?> returnType = replacement.getReturnType();
     if (original instanceof Method) {
@@ -297,6 +300,7 @@ public final class Albatross {
     return 0;
   }
 
+  @Alias("backupAndHook")
   public static boolean backupAndHook(Member target, Method hook, Method backup, boolean check, boolean checkReturn, Set<Class<?>> dependencies, int targetExecMode, int hookerExecMode) throws AlbatrossException {
     if (initStatus > STATUS_INIT_OK)
       return false;
@@ -347,6 +351,7 @@ public final class Albatross {
     return backup(target, backup, true, true, null, DO_NOTHING, CURRENT);
   }
 
+  @Alias("backup")
   public static boolean backup(Member target, Method backup, boolean check, boolean checkReturn, Set<Class<?>> dependencies, int execMode, int backupWay) throws AlbatrossException {
     if (initStatus > STATUS_INIT_OK)
       return false;
@@ -386,6 +391,7 @@ public final class Albatross {
     return backupField(new HashSet<>(), target, backup, null);
   }
 
+  @Alias("backupField")
   private static boolean backupField(Set<Class<?>> dependencies, Field target, Field backup, Class<?> targetType) throws FieldException, AlbatrossErr {
     if (containsFlags(FLAG_FIELD_INVALID))
       return false;
@@ -587,6 +593,7 @@ public final class Albatross {
 
   private native static void banInstance(Class<?> clz);
 
+  @Alias("ensureClassInitialized")
   public static boolean ensureClassInitialized(Class<?> clazz) {
     try {
       Class.forName(clazz.getName(), true, clazz.getClassLoader());
@@ -596,6 +603,7 @@ public final class Albatross {
     return false;
   }
 
+  @Alias("ensureClassInitializedForVisibly")
   private static boolean ensureClassInitializedForVisibly(Class<?> clazz) {
     try {
       Class.forName(clazz.getName(), true, clazz.getClassLoader());
@@ -623,6 +631,52 @@ public final class Albatross {
     return !containsFlags(FLAG_FIELD_INVALID);
   }
 
+
+  @TargetClass(targetExec = DO_NOTHING)
+  private static class $Image {
+
+    @ByName("ensureClassInitialized")
+    static StaticMethodDef<Boolean> ensureClassInitialized;
+
+    @ByName("ensureClassInitializedForVisibly")
+    static StaticMethodDef<Boolean> ensureClassInitializedForVisibly;
+
+
+    @ByName("appendLoader")
+    static StaticMethodDef<Boolean> appendLoader;
+
+    @ByName("checkMethodReturn")
+    static StaticMethodDef<Set<?>> checkMethodReturn;
+
+    @ByName("onClassInit")
+    static StaticMethodDef<Boolean> onClassInit;
+    @ByName("getCallerClass")
+    static StaticMethodDef<Class<?>> getCallerClass;
+
+    @ByName("currentApplication")
+    static StaticMethodDef<Application> currentApplication;
+
+    @ByName("backup")
+    static StaticMethodDef<Boolean> backup;
+
+    @ByName("backupAndHook")
+    static StaticMethodDef<Boolean> backupAndHook;
+
+    @ByName("hookClassInternal")
+    static StaticMethodDef<Integer> hookClassInternal;
+
+    @ByName("backupField")
+    static StaticMethodDef<Boolean> backupField;
+
+
+  }
+
+  @TargetClass(targetExec = DO_NOTHING)
+  private static class InstructionListenerH {
+    @ByName("onEnter")
+    static VoidMethodDef onEnter;
+  }
+
   @SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
   public static boolean init(int flags) {
     if ((initStatus & STATUS_INIT_OK) == STATUS_INIT_OK)
@@ -645,30 +699,31 @@ public final class Albatross {
         }
         toVisitedClass = new HashSet<>();
         initField();
+        hookClassInternal($Image.class, Albatross.class.getClassLoader(), Albatross.class, null);
+        hookClassInternal(InstructionListenerH.class, Albatross.class.getClassLoader(), InstructionListener.class, null);
         transactionBegin(false);
         try {
-          Method ensureClassInitialized = Albatross.class.getDeclaredMethod("ensureClassInitialized", Class.class);
+          Method ensureClassInitialized = $Image.ensureClassInitialized.method;
           if ((initResult & 4) != 0) {
-            Method ensureClassInitializedVisibly = Albatross.class.getDeclaredMethod("ensureClassInitializedForVisibly", Class.class);
+            Method ensureClassInitializedVisibly = $Image.ensureClassInitializedForVisibly.method;
             replace(ensureClassInitialized, ensureClassInitializedVisibly);
             ensureClassInitialized = ensureClassInitializedVisibly;
           }
-          registerMethodNative(ensureClassInitialized, Albatross.class.getDeclaredMethod("onClassInit", Class.class),
-              Albatross.class.getDeclaredMethod("appendLoader", ClassLoader.class), Albatross.class.getDeclaredMethod("checkMethodReturn", Set.class, Object.class, Method.class),
-              InstructionListener.class.getDeclaredMethod("onEnter", Object.class, int.class, long.class));
+          registerMethodNative(ensureClassInitialized, $Image.onClassInit.method,
+              $Image.appendLoader.method, $Image.checkMethodReturn.method, InstructionListenerH.onEnter.method);
           int sdkInt = Build.VERSION.SDK_INT;
           if (sdkInt > 28 && sdkInt < 35) {
             Class<?> Reflection = Class.forName("sun.reflect.Reflection");
             addToVisit(Reflection);
-            Albatross.backup(Reflection.getDeclaredMethod("getCallerClass"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, AOT | DISABLE_JIT, CURRENT);
+            Albatross.backup(Reflection.getDeclaredMethod("getCallerClass"), $Image.getCallerClass.method, false, false, null, AOT | DISABLE_JIT, CURRENT);
           } else {
             Class<?> VMStack = Class.forName("dalvik.system.VMStack");
             addToVisit(VMStack);
-            Albatross.backup(VMStack.getDeclaredMethod("getStackClass1"), Albatross.class.getDeclaredMethod("getCallerClass"), false, false, null, AOT | DISABLE_JIT, CURRENT);
+            Albatross.backup(VMStack.getDeclaredMethod("getStackClass1"), $Image.getCallerClass.method, false, false, null, AOT | DISABLE_JIT, CURRENT);
           }
           Class<?> ActivityThread = Class.forName("android.app.ActivityThread");
           addToVisit(ActivityThread);
-          Albatross.backup(ActivityThread.getDeclaredMethod("currentApplication"), Albatross.class.getDeclaredMethod("currentApplication"), false, false, null, AOT | DISABLE_JIT, CURRENT);
+          Albatross.backup(ActivityThread.getDeclaredMethod("currentApplication"), $Image.currentApplication.method, false, false, null, AOT | DISABLE_JIT, CURRENT);
           defaultHookerBackupExecMode = INTERPRETER;
           if (Debug.isDebuggerConnected() || containsFlags(FLAG_NO_COMPILE)) {
             albatross_flags |= FLAG_NO_COMPILE;
@@ -693,10 +748,10 @@ public final class Albatross {
             }
           }
           if (!containsFlags(FLAG_NO_COMPILE)) {
-            if (compileMethod(Albatross.class.getDeclaredMethod("backup", Member.class, Method.class, boolean.class, boolean.class, Set.class, int.class, int.class))) {
-              compileMethod(Albatross.class.getDeclaredMethod("backupAndHook", Member.class, Method.class, Method.class, boolean.class, boolean.class, Set.class, int.class, int.class));
-              compileMethod(Albatross.class.getDeclaredMethod("hookClassInternal", Class.class, ClassLoader.class, Class.class, Object.class));
-              compileMethod(Albatross.class.getDeclaredMethod("backupField", Set.class, Field.class, Field.class, Class.class));
+            if (compileMethod($Image.backup.method)) {
+              compileMethod($Image.backupAndHook.method);
+              compileMethod($Image.hookClassInternal.method);
+              compileMethod($Image.backupField.method);
             }
           }
           if (containsFlags(FLAG_DISABLE_LOG)) {
@@ -829,6 +884,7 @@ public final class Albatross {
     return defaultClass;
   }
 
+  @Alias("getCallerClass")
   public native static Class<?> getCallerClass();
 
 
@@ -1064,6 +1120,7 @@ public final class Albatross {
     HOOK_METHOD, BACKUP_METHOD, HOOK_CONSTRUCTOR, BACKUP_CONSTRUCTOR
   }
 
+  @Alias("hookClassInternal")
   private static int hookClassInternal(Class<?> hooker, ClassLoader loader, Class<?> defaultClass, Object instance) throws AlbatrossErr {
     if (initStatus > STATUS_INIT_OK) {
       return 0;
@@ -1074,7 +1131,6 @@ public final class Albatross {
     }
     HashMap<Object, HookRecord> hookRecord = new HashMap<>();
     List<BackupRecord> backupRecords = new ArrayList<>();
-
     try {
       if (!isHookerAssignableNative(hooker, null))
         ensureClassInitialized(hooker);
@@ -2010,6 +2066,7 @@ public final class Albatross {
 
   private static List<ClassLoader> classLoaderList = new ArrayList<>();
 
+  @Alias("appendLoader")
   synchronized static boolean appendLoader(ClassLoader loader) {
     if (classLoaderList.contains(loader))
       return false;
@@ -2020,6 +2077,7 @@ public final class Albatross {
     return true;
   }
 
+  @Alias("currentApplication")
   public static native Application currentApplication();
 
   public static boolean syncAppLoader() {
@@ -2089,6 +2147,7 @@ public final class Albatross {
 
   static Map<Class<?>, ReturnType> classReturnTypeMap;
 
+  @Alias("onClassInit")
   private static boolean onClassInit(Class<?> targetClass) {
     Class<?> hookClass = pendingMap.get(targetClass.getName());
     if (hookClass == null)

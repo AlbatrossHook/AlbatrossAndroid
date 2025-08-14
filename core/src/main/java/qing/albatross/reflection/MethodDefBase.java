@@ -38,6 +38,7 @@ class MethodDefBase extends ReflectionBase {
     ArgumentType argumentType = field.getAnnotation(ArgumentType.class);
     ArgumentTypeName typeName;
     ClassLoader classLoader = cls.getClassLoader();
+    ByName byName;
     if (argumentType != null) {
       Class<?>[] parameterTypes = argumentType.value();
       Albatross.checkParameterTypes(dependencies, parameterTypes, null, classLoader);
@@ -49,7 +50,9 @@ class MethodDefBase extends ReflectionBase {
       String[] classes = typeName.value();
       Class<?>[] paramClasses = ReflectUtils.getArgumentTypesFromString(classes, classLoader, false);
       this.method = ReflectUtils.findMethod(cls, fieldName, paramClasses);
-    } else if (field.getAnnotation(ByName.class) != null) {
+    } else if ((byName = field.getAnnotation(ByName.class)) != null) {
+      if (!byName.value().isEmpty())
+        fieldName = byName.value();
       this.method = ReflectUtils.findDeclaredMethodByName(cls, fieldName);
     } else {
       this.method = ReflectUtils.findMethod(cls, fieldName);
