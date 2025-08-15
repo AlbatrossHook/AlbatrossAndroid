@@ -1,3 +1,7 @@
+version 1.0.7
+ - Support direct loading of the so library for initialization
+ - Methods can be obtained through annotation aliases, ensuring that they can still be obtained even in the event of confusion
+ - Add proguard obfuscation rules
 version 1.0.6
  - Optimized the matching of primitive types
  - Fix the issue where the system class instruction hook does not take effect

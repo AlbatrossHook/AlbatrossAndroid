@@ -84,6 +84,27 @@ Albatross 遵循以下设计目标：
 与`app`模块类似，用于测试32位的架构（arm,x86）。
 
 ## 使用示例
+### 初始化
+1.不混淆代码的情况下,不可以配置初始化参数,不推荐
+```java
+  System.loadLibrary("albatross_base");
+```
+2.jni注册，调用java api初始化
+```cpp
+
+JNICALL jboolean registerAlbatrossLib(JNIEnv *env, jclass clazz,jclass albatross) {
+    int err_code = AlbatrossAndroidInit(env, albatross);
+    if (err_code)
+        return JNI_FALSE;
+    return JNI_TRUE;
+}
+```
+
+```java
+ registerAlbatrossLib(Albatross.class);
+ Albatross.init(0);
+```
+
 ### 1. HookActivity方法并访问字段。
 ```java
 // 定义Hooker类
@@ -295,8 +316,6 @@ public static void test() throws AlbatrossErr {
 
 ## 致谢
 本框架受YAHFA框架启发，特别感谢Xposed和SandHook项目在安卓Hook技术方面的开创性贡献。
-
-## 版权声明
 
 - [YAHFA](https://github.com/PAGalaxyLab/YAHFA)  版权所有 (c) [PAGalaxyLab](https://github.com/PAGalaxyLab)
 - [SandHook](https://github.com/asLody/SandHook)  版权所有 (c) [asLody](https://github.com/asLody)

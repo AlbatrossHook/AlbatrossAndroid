@@ -306,8 +306,6 @@ More tools and documentation will follow. Stay tuned for updates on `albatross-s
 Inspired by the YAHFA framework while introducing architectural improvements for modern Android systems. Special thanks to the Xposed and SandHook projects for pioneering Android hooking techniques.
 
 
-## Credits
-
 - [YAHFA](https://github.com/PAGalaxyLab/YAHFA)  Copyright (c) [PAGalaxyLab](https://github.com/PAGalaxyLab)
 - [SandHook](https://github.com/asLody/SandHook)  Copyright (c) [asLody](https://github.com/asLody)
 
