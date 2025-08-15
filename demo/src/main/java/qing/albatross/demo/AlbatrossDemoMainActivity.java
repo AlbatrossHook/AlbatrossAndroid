@@ -113,9 +113,9 @@ public class AlbatrossDemoMainActivity extends Activity {
 
   public void debug(View view) {
     if (Debug.isDebuggerConnected()) {
-      textView.setText("debugger");
+      textView.setText("debugger:"+BuildConfig.DEBUG);
     } else {
-      textView.setText("no debugger");
+      textView.setText("no debugger:"+BuildConfig.DEBUG);
     }
   }
 
