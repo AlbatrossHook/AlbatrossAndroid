@@ -53,7 +53,7 @@ class MethodDefBase extends ReflectionBase {
     } else if ((byName = field.getAnnotation(ByName.class)) != null) {
       if (!byName.value().isEmpty())
         fieldName = byName.value();
-      this.method = ReflectUtils.findDeclaredMethodByName(cls, fieldName);
+      this.method = ReflectUtils.findDeclaredMethodByName(cls, fieldName,byName.onlyAnno());
     } else {
       this.method = ReflectUtils.findMethod(cls, fieldName);
     }

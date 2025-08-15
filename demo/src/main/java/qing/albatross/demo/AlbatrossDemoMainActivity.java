@@ -59,11 +59,21 @@ public class AlbatrossDemoMainActivity extends Activity {
       System.loadLibrary("api");
       registerAlbatrossLib(Albatross.class);
       Albatross.init(0);
-    } catch (Throwable ignore) {
-      Albatross.loadLibrary("albatross_base");
+    } catch (Throwable e) {
+      if (BuildConfig.DEBUG)
+        Albatross.loadLibrary("albatross_base");
+      else
+        throw e;
     }
     boolean res = Albatross.initRpcClass(UnixRpcServer.class);
     assert res;
+  }
+
+  public void initByLoad(View view) {
+    if (BuildConfig.DEBUG) {
+      System.loadLibrary("albatross_base");
+      isLoad = true;
+    }
   }
 
   public void load(View view) {
@@ -72,6 +82,8 @@ public class AlbatrossDemoMainActivity extends Activity {
       assert (Albatross.currentApplication() == getApplication());
       return;
     }
+    if (!BuildConfig.DEBUG)
+      return;
     if (!App.test()) {
       throw new RuntimeException("will be caught");
     }
@@ -155,7 +167,6 @@ public class AlbatrossDemoMainActivity extends Activity {
 
 
   public void getCaller(View view) {
-    initAlbatross();
     Class<?> caller = Albatross.getCallerClass();
     textView.setText("caller:" + caller.getName() + ":" + callerCount++);
   }

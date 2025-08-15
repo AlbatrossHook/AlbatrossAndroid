@@ -679,8 +679,9 @@ public final class Albatross {
 
   @SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
   public static boolean init(int flags) {
-    if ((initStatus & STATUS_INIT_OK) == STATUS_INIT_OK)
-      return true;
+    if ((initStatus & (STATUS_INIT_OK | STATUS_INIT_FAIL)) != 0) {
+      return (initStatus & STATUS_INIT_OK) != 0;
+    }
     albatross_flags = flags;
     try {
       if (containsFlags(FLAG_DEBUG)) {
@@ -699,7 +700,14 @@ public final class Albatross {
         }
         toVisitedClass = new HashSet<>();
         initField();
-        hookClassInternal($Image.class, Albatross.class.getClassLoader(), Albatross.class, null);
+        if (hookClassInternal($Image.class, Albatross.class.getClassLoader(), Albatross.class, null) == 0) {
+          Albatross.log("should keep annotation info:" + $Image.class.getDeclaredField("ensureClassInitialized").getAnnotation(ByName.class)
+              + ":" + Albatross.class.getDeclaredMethod("ensureClassInitialized", Class.class).getAnnotation(Alias.class));
+          initStatus |= STATUS_INIT_FAIL;
+          return false;
+        } else {
+//          Albatross.log("get hooker method success:" + $Image.ensureClassInitialized);
+        }
         hookClassInternal(InstructionListenerH.class, Albatross.class.getClassLoader(), InstructionListener.class, null);
         transactionBegin(false);
         try {
@@ -783,7 +791,7 @@ public final class Albatross {
         initStatus |= STATUS_INIT_FAIL | FLAG_FIELD_BACKUP_BAN;
       }
     } catch (Exception e) {
-      Albatross.log("Albatross init", e);
+      Albatross.log("Albatross init:" + e, e);
     }
     return false;
   }
@@ -1117,7 +1125,12 @@ public final class Albatross {
   }
 
   enum HookAction {
-    HOOK_METHOD, BACKUP_METHOD, HOOK_CONSTRUCTOR, BACKUP_CONSTRUCTOR
+    HOOK_METHOD(0), BACKUP_METHOD(1), HOOK_CONSTRUCTOR(2), BACKUP_CONSTRUCTOR(3);
+    final int v;
+
+    HookAction(int v) {
+      this.v = v;
+    }
   }
 
   @Alias("hookClassInternal")
@@ -1212,8 +1225,6 @@ public final class Albatross {
     boolean fieldEnable = !containsFlags(FLAG_FIELD_INVALID);
     boolean staticEnable = containsFlags(FLAG_FIELD_BACKUP_STATIC);
     for (Field field : fields) {
-      if (field == null)
-        continue;
       boolean isStatic = Modifier.isStatic(field.getModifiers());
       if (fieldEnable) {
         FieldRef fieldRef = field.getAnnotation(FieldRef.class);
@@ -1390,6 +1401,7 @@ public final class Albatross {
       String[] className;
       String[] classNameArgs;
       HookAction hookWay;
+      ByName methodMarkAlias;
       int targetExec = CLASS_ALREADY_HOOK;
       if ((hookBackup = m.getAnnotation(MethodHookBackup.class)) != null) {
         targetStatic = hookBackup.isStatic();
@@ -1558,70 +1570,87 @@ public final class Albatross {
           continue;
         }
       }
+
       Class<?>[] argTypes;
       Method targetMethod = null;
       Constructor<?> targetConstructor = null;
-      try {
-        if (classNameArgs.length > 0) {
-          argTypes = getArgumentTypesFromString(classNameArgs, loader, false);
-          checkArgument = true;
-        } else {
-          checkArgument = false;
-          argTypes = getArgumentTypes(dependencies, parameterAnnotations, targetClass, mParameterTypes, loader, targetStatic, isHookStatic);
-        }
-      } catch (ClassNotFoundException e) {
-        if (methodRequired) {
-          throw new RequiredMethodErr("required method argument class is not find:" + e.getMessage(), annotations[0]);
-        }
-        log("Cannot find target method argument for " + m);
-        continue;
-      } catch (FindMethodException e) {
-        CheckParameterTypesResult subArgTypes = e.subArgTypes;
-        if (!isMirror)
-          subArgTypes.excludeMethod = m;
-        if (hookWay == HookAction.HOOK_METHOD || hookWay == HookAction.BACKUP_METHOD) {
-          String name;
-          if (hookWay == HookAction.HOOK_METHOD)
-            name = getSplitValue(HOOK_SUFFIX, m.getName());
+      if (hookWay.v <= HookAction.BACKUP_METHOD.v && (methodMarkAlias = m.getAnnotation(ByName.class)) != null) {
+        argTypes = null;
+        try {
+          if ((methodOption & DefOption.VIRTUAL) == 0)
+            targetMethod = ReflectUtils.findDeclaredMethodByName(targetClass, methodMarkAlias.value(), methodMarkAlias.onlyAnno());
           else
-            name = getSplitValue(BACKUP_SUFFIX, m.getName());
-          if ((methodOption & DefOption.VIRTUAL) == 0) {
-            targetMethod = ReflectUtils.findDeclaredMethodWithType(targetClass, name, e.argTypes, subArgTypes);
-            if (targetMethod == null) {
-              for (String alias : aliases) {
-                targetMethod = ReflectUtils.findDeclaredMethodWithType(targetClass, alias, e.argTypes, subArgTypes);
-                if (targetMethod != null)
-                  break;
+            targetMethod = ReflectUtils.findMethodByName(targetClass, methodMarkAlias.value(), methodMarkAlias.onlyAnno());
+          checkArgument = true;
+        } catch (NoSuchMethodException ignore) {
+          log("Wrong target method for " + m);
+          if (methodRequired) {
+            throw new RequiredMethodErr("Wrong target method for " + m, annotations[0]);
+          }
+        }
+      } else {
+        try {
+          if (classNameArgs.length > 0) {
+            argTypes = getArgumentTypesFromString(classNameArgs, loader, false);
+            checkArgument = true;
+          } else {
+            checkArgument = false;
+            argTypes = getArgumentTypes(dependencies, parameterAnnotations, targetClass, mParameterTypes, loader, targetStatic, isHookStatic);
+          }
+        } catch (ClassNotFoundException e) {
+          if (methodRequired) {
+            throw new RequiredMethodErr("required method argument class is not find:" + e.getMessage(), annotations[0]);
+          }
+          log("Cannot find target method argument for " + m);
+          continue;
+        } catch (FindMethodException e) {
+          CheckParameterTypesResult subArgTypes = e.subArgTypes;
+          if (!isMirror)
+            subArgTypes.excludeMethod = m;
+          if (hookWay.v <= HookAction.BACKUP_METHOD.v) {
+            String name;
+            if (hookWay == HookAction.HOOK_METHOD)
+              name = getSplitValue(HOOK_SUFFIX, m.getName());
+            else
+              name = getSplitValue(BACKUP_SUFFIX, m.getName());
+            if ((methodOption & DefOption.VIRTUAL) == 0) {
+              targetMethod = ReflectUtils.findDeclaredMethodWithType(targetClass, name, e.argTypes, subArgTypes);
+              if (targetMethod == null) {
+                for (String alias : aliases) {
+                  targetMethod = ReflectUtils.findDeclaredMethodWithType(targetClass, alias, e.argTypes, subArgTypes);
+                  if (targetMethod != null)
+                    break;
+                }
               }
+            } else {
+              targetMethod = ReflectUtils.findMethodWithType(targetClass, name, e.argTypes, subArgTypes);
+              if (targetMethod == null) {
+                for (String alias : aliases) {
+                  targetMethod = ReflectUtils.findMethodWithType(targetClass, alias, e.argTypes, subArgTypes);
+                  if (targetMethod != null)
+                    break;
+                }
+              }
+            }
+            if (targetMethod == null) {
+              log("Cannot find target method argument for " + m);
+              if (methodRequired) {
+                throw new RequiredMethodErr("required method argument class is not find:" + e.getMessage(), annotations[0]);
+              }
+              continue;
             }
           } else {
-            targetMethod = ReflectUtils.findMethodWithType(targetClass, name, e.argTypes, subArgTypes);
-            if (targetMethod == null) {
-              for (String alias : aliases) {
-                targetMethod = ReflectUtils.findMethodWithType(targetClass, alias, e.argTypes, subArgTypes);
-                if (targetMethod != null)
-                  break;
+            targetConstructor = ReflectUtils.findDeclaredConstructorWithType(targetClass, e.argTypes, subArgTypes);
+            if (targetConstructor == null) {
+              log("Cannot find target constructor  for " + m);
+              if (methodRequired) {
+                throw new RequiredMethodErr("required target constructor is not find:" + e.getMessage(), annotations[0]);
               }
+              continue;
             }
           }
-          if (targetMethod == null) {
-            log("Cannot find target method argument for " + m, e);
-            if (methodRequired) {
-              throw new RequiredMethodErr("required method argument class is not find:" + e.getMessage(), annotations[0]);
-            }
-            continue;
-          }
-        } else {
-          targetConstructor = ReflectUtils.findDeclaredConstructorWithType(targetClass, e.argTypes, subArgTypes);
-          if (targetConstructor == null) {
-            log("Cannot find target constructor  for " + m, e);
-            if (methodRequired) {
-              throw new RequiredMethodErr("required target constructor is not find:" + e.getMessage(), annotations[0]);
-            }
-            continue;
-          }
+          argTypes = e.argTypes;
         }
-        argTypes = e.argTypes;
       }
       switch (hookWay) {
         case HOOK_METHOD:
@@ -1881,7 +1910,8 @@ public final class Albatross {
       FieldConfig fieldConfig = new FieldConfig(constructor, clz);
       fieldConfig.constructor_slot = constructor_slot;
       fieldClsMap.put(fieldClz, fieldConfig);
-    } catch (NoSuchMethodException ignore) {
+    } catch (NoSuchMethodException e) {
+      Albatross.log("putField", e);
     }
   }
 

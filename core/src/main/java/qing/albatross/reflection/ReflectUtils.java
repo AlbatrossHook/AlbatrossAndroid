@@ -49,7 +49,7 @@ public class ReflectUtils {
   }
 
 
-  public static Method findDeclaredMethodByName(Class<?> clazz, String name) throws NoSuchMethodException {
+  public static Method findDeclaredMethodByName(Class<?> clazz, String name, boolean onlyAlias) throws NoSuchMethodException {
     Method[] methods = clazz.getDeclaredMethods();
     for (Method method : methods) {
       Alias alias = method.getAnnotation(Alias.class);
@@ -58,8 +58,22 @@ public class ReflectUtils {
           return method;
         continue;
       }
+      if (onlyAlias)
+        continue;
       if (method.getName().equals(name)) {
         return method;
+      }
+    }
+    throw new NoSuchMethodException("Method " + name + " not found in " + clazz);
+  }
+
+  public static Method findMethodByName(Class<?> clazz, String name, boolean onlyAlias) throws NoSuchMethodException {
+    while (clazz != null) {
+      try {
+        return findDeclaredMethodByName(clazz, name, onlyAlias);
+      } catch (NoSuchMethodException e) {
+        clazz = clazz.getSuperclass();
+        Albatross.addToVisit(clazz);
       }
     }
     throw new NoSuchMethodException("Method " + name + " not found in " + clazz);

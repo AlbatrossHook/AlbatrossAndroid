@@ -14,7 +14,6 @@
         <activity
             android:name=".demo.AlbatrossDemoMainActivity"
             android:exported="true"
-            android:label="app64"
             android:theme="@style/Theme.Albatross">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
