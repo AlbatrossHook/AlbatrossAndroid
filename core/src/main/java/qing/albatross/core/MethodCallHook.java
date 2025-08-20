@@ -15,7 +15,13 @@
  */
 package qing.albatross.core;
 
+import android.util.ArrayMap;
+
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Member;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Map;
 
 import qing.albatross.annotation.Alias;
 import qing.albatross.annotation.ByName;
@@ -24,10 +30,32 @@ import qing.albatross.reflection.VoidMethodDef;
 
 
 public class MethodCallHook {
+
+
+  static Map<Class<?>, ReturnType> classReturnTypeMap;
+
+
+  static {
+    classReturnTypeMap = new ArrayMap<>(10);
+    classReturnTypeMap.put(void.class, ReturnType.VOID);
+    classReturnTypeMap.put(Void.class, ReturnType.VOID);
+    classReturnTypeMap.put(boolean.class, ReturnType.BOOL);
+    classReturnTypeMap.put(char.class, ReturnType.CHAR);
+    classReturnTypeMap.put(byte.class, ReturnType.BYTE);
+    classReturnTypeMap.put(short.class, ReturnType.SHORT);
+    classReturnTypeMap.put(int.class, ReturnType.INT);
+    classReturnTypeMap.put(float.class, ReturnType.FLOAT);
+    classReturnTypeMap.put(long.class, ReturnType.LONG);
+    classReturnTypeMap.put(double.class, ReturnType.DOUBLE);
+  }
+
+
   Member member;
   long listenerId = 0;
+  int argOffset;
   ReturnType returnType;
   MethodCallback callback;
+  Class<?>[] parameterTypes;
 
   public synchronized void unHook() {
     if (listenerId != 0) {
@@ -36,6 +64,26 @@ public class MethodCallHook {
     }
   }
 
+  public MethodCallHook(Member member) {
+    this.member = member;
+    if (member instanceof Constructor<?>) {
+      parameterTypes = ((Constructor<?>) member).getParameterTypes();
+      argOffset = 1;
+      returnType = ReturnType.VOID;
+    } else {
+      Method method = (Method) member;
+      parameterTypes = method.getParameterTypes();
+      if (Modifier.isStatic(member.getModifiers()))
+        argOffset = 0;
+      else
+        argOffset = 1;
+      Class<?> retClass = method.getReturnType();
+      returnType = classReturnTypeMap.get(retClass);
+      if (returnType == null) {
+        returnType = ReturnType.OBJECT;
+      }
+    }
+  }
 
   @Alias("callVoid")
   private void callVoid(long invocationContext) {
@@ -44,29 +92,32 @@ public class MethodCallHook {
 
 
   static class Image {
-    @ByName
+    @ByName("callVoid")
     public static VoidMethodDef callVoid;
-    @ByName
+    @ByName("callBool")
     public static MethodDef<Boolean> callBool;
-    @ByName
+    @ByName("callChar")
     public static MethodDef<Character> callChar;
-    @ByName
+    @ByName("callByte")
     public static MethodDef<Byte> callByte;
-    @ByName
+    @ByName("callShort")
     public static MethodDef<Short> callShort;
-    @ByName
+    @ByName("callInt")
     public static MethodDef<Integer> callInt;
-    @ByName
+    @ByName("callFloat")
     public static MethodDef<Float> callFloat;
-    @ByName
+    @ByName("callLong")
     public static MethodDef<Long> callLong;
-    @ByName
+    @ByName("callDouble")
     public static MethodDef<Double> callDouble;
-    @ByName
+    @ByName("callObject")
     public static MethodDef<Object> callObject;
-
   }
 
+
+  int getParamCount() {
+    return parameterTypes.length;
+  }
 
   @Alias("callBool")
   private boolean callBool(long invocationContext) {
@@ -147,6 +198,54 @@ public class MethodCallHook {
 
 
   static native Object invokeObject(long invocationContext);
+
+
+//  static native boolean getParamBool(long invocationContext, int idx);
+//
+//  static native char getParamChar(long invocationContext, int idx);
+//
+//  static native byte getParamByte(long invocationContext, int idx);
+//
+//  static native short getParamShort(long invocationContext, int idx);
+
+
+  static native int getParamInt(long invocationContext, int idx);
+
+
+  static native float getParamFloat(long invocationContext, int idx);
+
+
+  static native long getParamLong(long invocationContext, int idx);
+
+
+  static native double getParamDouble(long invocationContext, int idx);
+
+
+  static native Object getParamObject(long invocationContext, int idx);
+
+
+//  static native void setParamBool(long invocationContext, int idx,boolean v);
+//
+//  static native void setParamChar(long invocationContext, int idx,char v);
+//
+//  static native void setParamByte(long invocationContext, int idx,byte v);
+//
+//  static native void setParamShort(long invocationContext, int idx,short v);
+
+
+  static native void setParamInt(long invocationContext, int idx, int v);
+
+
+  static native void setParamFloat(long invocationContext, int idx, float v);
+
+
+  static native void setParamLong(long invocationContext, int idx, long v);
+
+
+  static native void setParamDouble(long invocationContext, int idx, double v);
+
+
+  static native void setParamObject(long invocationContext, int idx, Object v);
 
 
 }

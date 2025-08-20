@@ -166,6 +166,25 @@ public final class Albatross {
     static native void iMethod7();
   }
 
+  private enum InitResultFlag {
+    INIT_OK(1),
+    BACKUP_CALL_JIT(2),
+    REPLACE_ENSURE_CLASS_INIT(4),
+    AOT_SUPPORTED(8),
+    INS_ENABLE(0x10),
+    JIT_SUPPORTED(0x20);
+
+    private final int mask;
+
+    InitResultFlag(int mask) {
+      this.mask = mask;
+    }
+
+    public boolean isSet(int initResult) {
+      return (initResult & mask) != 0;
+    }
+  }
+
 
   public static final String HOOK_SUFFIX = "\\$Hook";
   public static final String BACKUP_SUFFIX = "\\$Backup";
@@ -422,7 +441,7 @@ public final class Albatross {
     return false;
   }
 
-  static native long hookMethodNative(Member member, Object callback, int returnTYpe);
+  static native long hookMethodNative(Member member, Object callback, int returnTYpe, int paramCount);
 
   static native void unHookMethodNative(long callbackId);
 
@@ -464,26 +483,15 @@ public final class Albatross {
   }
 
   public static MethodCallHook hookMethod(Member member, MethodCallback callback, int compile) {
-    MethodCallHook listener = new MethodCallHook();
-    ReturnType returnType;
-    if (member instanceof Constructor) {
-      returnType = ReturnType.VOID;
-    } else {
-      Method method = (Method) member;
-      Class<?> retClass = method.getReturnType();
-      returnType = classReturnTypeMap.get(retClass);
-      if (returnType == null) {
-        returnType = ReturnType.OBJECT;
-      }
-    }
-    long listenerId = hookMethodNative(member, listener, returnType.value);
+    MethodCallHook listener = new MethodCallHook(member);
+    ReturnType returnType = listener.returnType;
+    long listenerId = hookMethodNative(member, listener, returnType.value, listener.parameterTypes.length + listener.argOffset);
     if (listenerId > 4096 || listenerId < 0) {
       listener.listenerId = listenerId;
       listener.callback = callback;
       if (compile != DO_NOTHING) {
         compileClass(callback.getClass(), compile);
       }
-      listener.member = member;
       return listener;
     }
     return null;
@@ -557,7 +565,7 @@ public final class Albatross {
   public static final int FLAG_INIT_CLASS = 0x1;
   public static final int FLAG_DEBUG = 0x2;
   public static final int FLAG_LOADER_FROM_CALLER = 0x4;
-  public static final int FLAG_COMPILE = 0x8;
+  public static final int FLAG_DISABLE_JIT = 0x8;
   public static final int FLAG_SUSPEND_VM = 0x10;
   public static final int FLAG_NO_COMPILE = 0x20;
 
@@ -667,14 +675,26 @@ public final class Albatross {
 
     @ByName("backupField")
     static StaticMethodDef<Boolean> backupField;
-
-
   }
 
   @TargetClass(targetExec = DO_NOTHING)
   private static class InstructionListenerH {
     @ByName("onEnter")
     static VoidMethodDef onEnter;
+  }
+
+  /**
+   * .registers 4
+   * .param p0, "a" # I
+   * .param p1, "b" # I
+   * .param p2, "c" # I
+   * 00008cb4: 1300 0c00               0000: const/16            v0, 0xc
+   * 00008cb8: 0f00                    0002: return              v0
+   */
+
+
+  private static int insLayoutMeasure(int a, int b, int c) {
+    return 12;
   }
 
   @SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
@@ -688,8 +708,9 @@ public final class Albatross {
         Debug.waitForDebugger();
       }
       Method initNativeMethod = Albatross.class.getDeclaredMethod("initMethodNative", Method.class, Method.class, int.class, Class.class);
-      int initResult = initMethodNative(initNativeMethod, Albatross.class.getDeclaredMethod("initFieldOffsetNative", Field.class, Field.class, int.class, Class.class), initNativeMethod.getModifiers(), Albatross.class);
-      if ((initResult & 1) != 0) {
+      int initResult = initMethodNative(initNativeMethod, Albatross.class.getDeclaredMethod("initFieldOffsetNative", Field.class, Field.class, int.class, Class.class),
+          flags, Albatross.class);
+      if (InitResultFlag.INIT_OK.isSet(initResult)) {
         initStatus |= STATUS_INIT_OK;
         initStatus &= ~(STATUS_INIT_FAIL | STATUS_NOT_INIT);
         if ((flags & FLAG_INIT_CLASS) != 0) {
@@ -712,7 +733,7 @@ public final class Albatross {
         transactionBegin(false);
         try {
           Method ensureClassInitialized = $Image.ensureClassInitialized.method;
-          if ((initResult & 4) != 0) {
+          if (InitResultFlag.REPLACE_ENSURE_CLASS_INIT.isSet(initResult)) {
             Method ensureClassInitializedVisibly = $Image.ensureClassInitializedForVisibly.method;
             replace(ensureClassInitialized, ensureClassInitializedVisibly);
             ensureClassInitialized = ensureClassInitializedVisibly;
@@ -741,17 +762,20 @@ public final class Albatross {
             defaultHookerExecMode = DO_NOTHING;
             defaultTargetExecMode = DO_NOTHING;
           } else {
-            if ((initResult & 8) != 0) {
-              defaultHookerExecMode = JIT_OPTIMIZED | AOT;
-              defaultTargetExecMode = JIT_OPTIMIZED | AOT;
-            } else {
+            if (InitResultFlag.JIT_SUPPORTED.isSet(initResult)) {
               defaultHookerExecMode = JIT_OPTIMIZED;
               defaultTargetExecMode = JIT_OPTIMIZED;
+            } else {
+              albatross_flags |= FLAG_NO_COMPILE;
+            }
+            if (InitResultFlag.AOT_SUPPORTED.isSet(initResult)) {
+              defaultHookerExecMode |= AOT;
+              defaultTargetExecMode |= AOT;
             }
             if (sdkInt <= 25) {
               disableFieldBackup();
             } else {
-              if ((initResult & 2) == 2)
+              if (InitResultFlag.BACKUP_CALL_JIT.isSet(initResult))
                 defaultHookerBackupExecMode = RECOMPILE_OPTIMIZED;
             }
           }
@@ -767,17 +791,6 @@ public final class Albatross {
             disableLog();
           }
           pendingMap = new HashMap<>();
-          classReturnTypeMap = new ArrayMap<>();
-          classReturnTypeMap.put(void.class, ReturnType.VOID);
-          classReturnTypeMap.put(Void.class, ReturnType.VOID);
-          classReturnTypeMap.put(boolean.class, ReturnType.BOOL);
-          classReturnTypeMap.put(char.class, ReturnType.CHAR);
-          classReturnTypeMap.put(byte.class, ReturnType.BYTE);
-          classReturnTypeMap.put(short.class, ReturnType.SHORT);
-          classReturnTypeMap.put(int.class, ReturnType.INT);
-          classReturnTypeMap.put(float.class, ReturnType.FLOAT);
-          classReturnTypeMap.put(long.class, ReturnType.LONG);
-          classReturnTypeMap.put(double.class, ReturnType.DOUBLE);
           initClassLoader();
           Albatross.hookClassInternal(MethodCallHook.Image.class, MethodCallHook.class.getClassLoader(), MethodCallHook.class, null);
         } finally {
@@ -786,6 +799,7 @@ public final class Albatross {
         registerHookCallback(new Method[]{MethodCallHook.Image.callVoid.method, MethodCallHook.Image.callBool.method, MethodCallHook.Image.callChar.method, MethodCallHook.Image.callByte.method,
             MethodCallHook.Image.callShort.method, MethodCallHook.Image.callInt.method, MethodCallHook.Image.callFloat.method, MethodCallHook.Image.callLong.method,
             MethodCallHook.Image.callDouble.method, MethodCallHook.Image.callObject.method});
+        measureLayoutNative(Albatross.class.getDeclaredMethod("insLayoutMeasure", int.class, int.class, int.class));
         return true;
       } else {
         initStatus |= STATUS_INIT_FAIL | FLAG_FIELD_BACKUP_BAN;
@@ -1101,9 +1115,9 @@ public final class Albatross {
     initStatus &= ~STATUS_DISABLED;
   }
 
-  private static int defaultHookerExecMode;
-  private static int defaultHookerBackupExecMode;
-  private static int defaultTargetExecMode;
+  private static int defaultHookerExecMode = DO_NOTHING;
+  private static int defaultHookerBackupExecMode = DO_NOTHING;
+  private static int defaultTargetExecMode = DO_NOTHING;
 
   public static void setExecConfiguration(int targetExecMode, int hookerExecMode) {
     if (containsFlags(FLAG_NO_COMPILE))
@@ -1154,37 +1168,39 @@ public final class Albatross {
     int hookerBackupDefaultExecOption = defaultHookerBackupExecMode;
     int targetDefaultExecOption = defaultTargetExecMode;
     boolean isDebug = Debug.isDebuggerConnected();
-    if (defaultClass == null) {
-      TargetClass targetClass = hooker.getAnnotation(TargetClass.class);
-      if (targetClass != null) {
-        if (!isDebug) {
-          int hookerExecOption = targetClass.hookerExec();
-          int targetExecOption = targetClass.targetExec();
-          int hookerBackupExecOption = targetClass.hookerBackupExec();
-          if (hookerExecOption != DEFAULT_OPTION) {
-            hookerDefaultExecOption = hookerExecOption;
-          }
-          if (targetExecOption != DEFAULT_OPTION) {
-            targetDefaultExecOption = targetExecOption;
-          }
-          if (hookerBackupExecOption != DEFAULT_OPTION) {
-            hookerBackupDefaultExecOption = hookerBackupExecOption;
-          }
+    TargetClass targetClassAnno = hooker.getAnnotation(TargetClass.class);
+    if (targetClassAnno != null) {
+      if (!isDebug) {
+        int hookerExecOption = targetClassAnno.hookerExec();
+        int targetExecOption = targetClassAnno.targetExec();
+        int hookerBackupExecOption = targetClassAnno.hookerBackupExec();
+        if (hookerExecOption != DEFAULT_OPTION) {
+          hookerDefaultExecOption = hookerExecOption;
         }
-        defaultClass = getTargetClassFromAnnotation(targetClass, loader);
+        if (targetExecOption != DEFAULT_OPTION) {
+          targetDefaultExecOption = targetExecOption;
+        }
+        if (hookerBackupExecOption != DEFAULT_OPTION) {
+          hookerBackupDefaultExecOption = hookerBackupExecOption;
+        }
+      }
+    }
+    if (defaultClass == null) {
+      if (targetClassAnno != null) {
+        defaultClass = getTargetClassFromAnnotation(targetClassAnno, loader);
         if (defaultClass == TargetClass.class)
           defaultClass = null;
         if (defaultClass != null) {
           if (loader == null)
             loader = defaultClass.getClassLoader();
-        } else if (targetClass.pendingHook()) {
-          String[] classNames = targetClass.className();
+        } else if (targetClassAnno.pendingHook()) {
+          String[] classNames = targetClassAnno.className();
           for (String className : classNames) {
             addPendingHook(className, hooker);
           }
           return 0;
-        } else if (targetClass.required()) {
-          throw new RequiredClassErr(targetClass);
+        } else if (targetClassAnno.required()) {
+          throw new RequiredClassErr(targetClassAnno);
         }
       }
     } else {
@@ -1216,7 +1232,6 @@ public final class Albatross {
     if (isMirror) {
       banInstance(hooker);
     }
-
     int runModeAnnotationCount = 0;
     int success_count = 0;
     Field[] fields = hooker.getDeclaredFields();
@@ -2082,7 +2097,7 @@ public final class Albatross {
   //final flag must exists
   private static final native int initFieldOffsetNative(Field field, Field field2, int accessFlags, Class<?> clz);
 
-  private static final native int initMethodNative(Method initNativeMethod, Method method2, int accessFlags, Class<?> clz);
+  private static final native int initMethodNative(Method initNativeMethod, Method method2, int initFlags, Class<?> clz);
 
   //---------------------------------
 
@@ -2091,6 +2106,7 @@ public final class Albatross {
   private static native void registerHookCallback(Method[] methods/*Method callVoid, Method callBool, Method callChar, Method callByte, Method callShort, Method callInt, Method callFloat,
                                                   Method callLong, Method callDouble, Method callObject*/);
 
+  private static native void measureLayoutNative(Method method);
 
   public static final String TAG = Albatross.class.getSimpleName();
 
@@ -2175,7 +2191,6 @@ public final class Albatross {
 
   static Map<String, Class<?>> pendingMap;
 
-  static Map<Class<?>, ReturnType> classReturnTypeMap;
 
   @Alias("onClassInit")
   private static boolean onClassInit(Class<?> targetClass) {

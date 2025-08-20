@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 package qing.albatross.core;
 
 import java.lang.reflect.Modifier;
@@ -30,6 +31,11 @@ public class InvocationContext {
 
   public int numberOfVRegs() {
     return listener.getNumberVRegs(invocationContext);
+  }
+
+  public String smaliString() {
+//    return InstructionListener.dumpSmaliString(invocationContext, -1);
+    throw new RuntimeException("not impl");
   }
 
   public boolean getVRegBool(int i) {
@@ -115,7 +121,7 @@ public class InvocationContext {
   public Object getThis() {
     if (Modifier.isStatic(listener.member.getModifiers()))
       return null;
-    return getParamBool(0);
+    return getParamObject(0);
   }
 
 
