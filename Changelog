@@ -1,3 +1,7 @@
+version 1.0.9
+- Optimize the code logic of the hook instruction to achieve better compatibility. Compatible with lineageOs.
+- jit compilation adds locks to prevent concurrency from causing jit code to be overwritten
+
 version 1.0.8
 - Fixed the issue left over from v1.0.5 where code execution listening was triggered only when the method was running
 
