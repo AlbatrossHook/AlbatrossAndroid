@@ -1,30 +1,33 @@
+version 1.1.0
+ - Optimize jit compilation to avoid inconsistencies, code recycling and other issues caused by concurrency.
+
 version 1.0.9
-- Optimize the code logic of the hook instruction to achieve better compatibility. Compatible with lineageOs.
-- jit compilation adds locks to prevent concurrency from causing jit code to be overwritten
+ - Optimize the code logic of the hook instruction to achieve better compatibility. Compatible with lineageOs.
+ - jit compilation adds locks to prevent concurrency from causing jit code to be overwritten.
 
 version 1.0.8
-- Fixed the issue left over from v1.0.5 where code execution listening was triggered only when the method was running
+ - Fixed the issue left over from v1.0.5 where code execution listening was triggered only when the method was running.
 
 version 1.0.7
- - Support direct loading of the so library for initialization
- - Methods can be obtained through annotation aliases, ensuring that they can still be obtained even in the event of confusion
- - Add proguard obfuscation rules
+ - Support direct loading of the so library for initialization.
+ - Methods can be obtained through annotation aliases, ensuring that they can still be obtained even in the event of confusion.
+ - Add proguard obfuscation rules.
 
 version 1.0.6
- - Optimized the matching of primitive types
- - Fix the issue where the system class instruction hook does not take effect
+ - Optimized the matching of primitive types.
+ - Fix the issue where the system class instruction hook does not take effect.
 
 version 1.0.5
  - Improve the execution speed of the instruction hook by only listening when the target method is executing.
  - Hooker is not necessarily an image class, it can be the target class itself.
  - Primitive types can also be fuzzy matched.
  - Can search for a method by its name. Support commenting aliases for methods, so that even after confusion, the target method can still be found.
- - Support multiple backups of a method and define the call way for the backup method
+ - Support multiple backups of a method and define the call way for the backup method.
 
 version 1.0.4
- - Throw an exception when the target class is an interface
- - Improve the methods related to the instruction hook
- - Transaction optimization and entrypoint judgment of arm methods
+ - Throw an exception when the target class is an interface.
+ - Improve the methods related to the instruction hook.
+ - Transaction optimization and entrypoint judgment of arm methods.
 
 version 1.0.3
  - Supports hooking of instructions.
@@ -33,7 +36,7 @@ version 1.0.2
  - Support backing up the fields of the parent class and setting possible aliases for the fields.
  - The specific type of a field can be determined by passing objects.
  - Support setting the effective Android system scope.
- - Prioritize using AOT code
+ - Prioritize using AOT code.
 
 version 1.0.1
  - Prohibit any instance methods, even if there are unrecognized annotations.
