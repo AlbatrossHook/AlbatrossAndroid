@@ -295,7 +295,6 @@ public final class Albatross {
     if (originalParams.size() != replacementParams.size()) {
       throw new MethodException(replacement, MethodExceptionReason.ARGUMENT_SIZE_NOT_MATCH, "Number of arguments don't match. original: " + originalParams.size() + ", " + replacementName + ": " + replacementParams.size());
     }
-
     for (int i = 0; i < originalParams.size(); i++) {
       Class<?> expectClass = replacementParams.get(i);
       Class<?> originalClz = originalParams.get(i);
@@ -577,6 +576,8 @@ public final class Albatross {
   public static final int FLAG_FIELD_INVALID = FLAG_FIELD_BACKUP_BAN | FLAG_FIELD_DISABLED;
 
   public static final int FLAG_DISABLE_LOG = 0x400;
+  public static final int FLAG_INJECT = 0x800;
+  public static final int FLAG_INIT_RPC = 0x1000;
 
 
   private static int albatross_flags = 0;
@@ -594,7 +595,7 @@ public final class Albatross {
       }
       return init(loadFlags);
     }
-    return false;
+    return true;
   }
 
   private native static boolean ensureClassInitializedNative(Class<?> clz);
