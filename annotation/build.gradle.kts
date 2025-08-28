@@ -3,14 +3,12 @@ plugins {
 }
 
 android {
-    namespace = "qing.albatross.demo"
+    namespace = "qing.albatross.annotation"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
     }
 
     buildTypes {
@@ -26,19 +24,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-    externalNativeBuild {
-        cmake {
-            path("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-    buildFeatures{
-        buildConfig = true;
-    }
 }
 
 dependencies {
-    compileOnly(project(":annotation"))
-    compileOnly(project(":core"))
-    implementation(project(":server"))
 }
