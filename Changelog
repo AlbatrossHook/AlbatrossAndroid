@@ -1,3 +1,9 @@
+version 1.1.1
+ - Optimize the hook logic and remove the abnormal features of rwx from the so library being hooked.
+ - The rpc client adds support for java.
+ - Add decompilation of the smali code.
+
+
 version 1.1.0
  - Optimize jit compilation to avoid inconsistencies, code recycling and other issues caused by concurrency.
 
