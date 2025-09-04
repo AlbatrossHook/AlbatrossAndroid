@@ -31,6 +31,14 @@ public class DemoServer extends UnixRpcInstance implements DemoApi {
   @Override
   public native byte broadcastLongArgTest(double d1, String s2, byte b3, long l4, double d5, byte b6, String s7, int i8, double d9, byte b10, float f11);
 
+
+  @Override
+  public byte receiveLongArgTest(double d1, String s2, byte b3, long l4, double d5, byte b6, String s7, int i8, double i9, byte b10, float s11) {
+    Albatross.log("d1:" + d1 + " s2:" + s2 + " b3:" + b3 + " l4:" + l4 + " d5:" + d5 + " b6:" + b6 + " s7:" + s7 + " i8:" + i8 + " i9:" + i9 + " b10:" + b10 + " s11:" + s11);
+    return 111;
+  }
+
+
   @Override
   public native int sendPrimary(String s, int i);
 

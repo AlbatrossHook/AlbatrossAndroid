@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,15 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.server;
 
 import static qing.albatross.server.UnixRpcMethodFactory.ARG_BYTE;
 
 import android.util.ArrayMap;
 
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -95,9 +91,4 @@ public abstract class UnixRpcInstance {
       servers.remove(serverObj);
     }
   }
-
-  String onReceiveMsg(int clientFd, Method method, int idx) {
-    return null;
-  }
-
 }

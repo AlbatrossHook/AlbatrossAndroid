@@ -30,4 +30,6 @@ public interface DemoApi {
 
   String startActivity(String pkgName, String activity, int uid);
 
+  byte receiveLongArgTest(double d1, String s2, byte b3, long l4, double d5, byte b6, String s7, int i8, double i9, byte b10, float s11);
+
 }

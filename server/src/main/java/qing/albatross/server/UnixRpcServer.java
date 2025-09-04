@@ -52,7 +52,7 @@ public class UnixRpcServer extends Thread {
     try {
       UnixRpcServer.registerCallback(UnixRpcInstance.class.getDeclaredMethod("onNewConnection", long.class, int.class),
           UnixRpcInstance.class.getDeclaredMethod("onConnectionClose", long.class, int.class),
-          UnixRpcInstance.class.getDeclaredMethod("onReceiveMsg", int.class, Method.class, int.class)
+          UnixRpcClientInstance.class.getDeclaredMethod("onClose")
       );
       isInit = true;
       return true;
@@ -70,7 +70,7 @@ public class UnixRpcServer extends Thread {
         return null;
       }
       UnixRpcServer server = new UnixRpcServer(socketPath, isAbstract, owner);
-      if (server.serverObj > 40960) {
+      if (server.serverObj > 40960 || server.serverObj < 0) {
         if (server.init(owner, api)) {
           owner.setServer(server);
           return server;
@@ -122,17 +122,25 @@ public class UnixRpcServer extends Thread {
 
   static native byte registerMethod(long serverObj, String name, Object method, byte[] args, byte retType);
 
+  static native byte registerClientMethod(long serverObj, String name, Object method, byte[] args, byte retType);
+
   static native byte registerBroadcast(long serverObj, String name, Object method, byte[] args, byte retType);
+
+  static native byte registerClientBroadcast(long serverObj, String name, Object method, byte[] args, byte retType);
 
   static native long createUnixServer(String path, Object owner, boolean isAbstract);
 
+  static native long createUnixClient(String path, Object owner, boolean isAbstract,boolean isSubscriber);
+
   static native void destroyUnixServer(long serverObj);
+
+  static native void destroyUnixClient(long serverObj);
 
   static native boolean runUnixServer(long serverObj);
 
   private native static int getSubscriberSize(long serverObj);
 
-  static native void registerCallback(Method onNewConnection, Method onConnectionClose, Method onReceiveMsg);
+  static native void registerCallback(Method onNewConnection, Method onConnectionClose, Method onClientClose);
 
   private static native int broadcastMessage(long serverObj, byte cmd, byte[] data, int dataLen);
 
