@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 package qing.albatross.core;
 
 import java.lang.reflect.Modifier;
@@ -34,8 +33,7 @@ public class InvocationContext {
   }
 
   public String smaliString() {
-//    return InstructionListener.dumpSmaliString(invocationContext, -1);
-    throw new RuntimeException("not impl");
+    return InstructionListener.dumpSmaliString(invocationContext, -1);
   }
 
   public boolean getVRegBool(int i) {

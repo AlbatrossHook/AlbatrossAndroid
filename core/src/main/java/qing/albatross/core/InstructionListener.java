@@ -16,6 +16,7 @@
 
 package qing.albatross.core;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -28,7 +29,7 @@ public class InstructionListener {
   InstructionCallback callback;
   long listenerId = 0;
   int numberVRegs = -1;
-  int first_arg_reg = -1;
+  int firstArgReg = -1;
 
 
   public synchronized void unHook() {
@@ -46,16 +47,20 @@ public class InstructionListener {
   }
 
   public int getFirstArgReg(long invocationContext) {
-    if (first_arg_reg >= 0)
-      return first_arg_reg;
+    if (firstArgReg >= 0)
+      return firstArgReg;
     if (member instanceof Method) {
       Method method = (Method) member;
       int arg_count = method.getParameterCount();
       if (!Modifier.isStatic(method.getModifiers()))
         arg_count += 1;
-      first_arg_reg = getNumberVRegs(invocationContext) - arg_count;
+      firstArgReg = getNumberVRegs(invocationContext) - arg_count;
+    } else {
+      Constructor<?> constructor = (Constructor<?>) member;
+      int arg_count = constructor.getParameterTypes().length + 1;
+      firstArgReg = getNumberVRegs(invocationContext) - arg_count;
     }
-    return first_arg_reg;
+    return firstArgReg;
   }
 
   public int getArgReg(long invocationContext, int i) {
@@ -76,27 +81,29 @@ public class InstructionListener {
 
   static native void unHookInstructionNative(long listenerId);
 
-  static native int NumberOfVRegs(long invocationContext);
+  public static native int NumberOfVRegs(long invocationContext);
 
-  static native float GetVRegFloat(long invocationContext, int i);
+  public static native float GetVRegFloat(long invocationContext, int i);
 
-  static native long GetVRegLong(long invocationContext, int i);
+  public static native long GetVRegLong(long invocationContext, int i);
 
-  static native double GetVRegDouble(long invocationContext, int i);
+  public static native double GetVRegDouble(long invocationContext, int i);
 
-  static native Object GetVRegReference(long invocationContext, int i);
+  public static native Object GetVRegReference(long invocationContext, int i);
 
-  static native int GetVReg(long invocationContext, int i);
+  public static native int GetVReg(long invocationContext, int i);
 
-  static native int SetVReg(long invocationContext, int i, int val);
+  public static native int SetVReg(long invocationContext, int i, int val);
 
-  static native float SetVRegFloat(long invocationContext, int i, float val);
+  public static native float SetVRegFloat(long invocationContext, int i, float val);
 
-  static native long SetVRegLong(long invocationContext, int i, long val);
+  public static native long SetVRegLong(long invocationContext, int i, long val);
 
-  static native double SetVRegDouble(long invocationContext, int i, double val);
+  public static native double SetVRegDouble(long invocationContext, int i, double val);
 
-  static native void SetVRegReference(long invocationContext, int i, Object val);
+  public static native void SetVRegReference(long invocationContext, int i, Object val);
+
+  static native String dumpSmaliString(long invocationContext,int dexPc);
 
   @Alias("onEnter")
   private void onEnter(Object self, int dexPc, long invocationContext) {

@@ -16,19 +16,13 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
 
 import qing.albatross.annotation.ExecOption;
-import qing.albatross.annotation.MethodBackup;
 import qing.albatross.core.Albatross;
 import qing.albatross.core.InstructionListener;
-import qing.albatross.demo.android.ActivityH;
 import qing.albatross.demo.android.HandlerHook;
-import qing.albatross.demo.server.DemoServer;
 import qing.albatross.exception.AlbatrossErr;
 import qing.albatross.exception.AlbatrossException;
-import qing.albatross.server.JsonFormatter;
 import qing.albatross.server.UnixRpcServer;
 
 
@@ -259,7 +253,7 @@ public class AlbatrossDemoMainActivity extends Activity {
           Albatross.log("self:" + self + " this:" + AlbatrossDemoMainActivity.this);
         }
         assert invocationContext.numberOfVRegs() == 7;
-        Albatross.log("onEnter:" + dexPc);
+        Albatross.log("[" + dexPc + "] " + invocationContext.smaliString());
         Object receiver = invocationContext.getParamObject(0);
         assert receiver == self;
         Object v = invocationContext.getParamObject(1);
