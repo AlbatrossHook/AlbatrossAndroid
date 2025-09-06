@@ -739,8 +739,9 @@ public final class Albatross {
             replace(ensureClassInitialized, ensureClassInitializedVisibly);
             ensureClassInitialized = ensureClassInitializedVisibly;
           }
+          new MethodStubs();
           registerMethodNative(ensureClassInitialized, $Image.onClassInit.method,
-              $Image.appendLoader.method, $Image.checkMethodReturn.method, InstructionListenerH.onEnter.method);
+              $Image.appendLoader.method, $Image.checkMethodReturn.method, InstructionListenerH.onEnter.method, MethodStubs.class);
           int sdkInt = Build.VERSION.SDK_INT;
           if (sdkInt > 28 && sdkInt < 35) {
             Class<?> Reflection = Class.forName("sun.reflect.Reflection");
@@ -2102,7 +2103,7 @@ public final class Albatross {
 
   //---------------------------------
 
-  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter);
+  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter, Class<?> stubClass);
 
   private static native void registerHookCallback(Method[] methods/*Method callVoid, Method callBool, Method callChar, Method callByte, Method callShort, Method callInt, Method callFloat,
                                                   Method callLong, Method callDouble, Method callObject*/);
