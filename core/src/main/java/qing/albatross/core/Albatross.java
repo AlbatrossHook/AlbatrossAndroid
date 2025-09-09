@@ -1578,6 +1578,9 @@ public final class Albatross {
       boolean isHookStatic = Modifier.isStatic(m.getModifiers());
       if (targetClass == TargetClass.class) {
         try {
+          if (!targetStatic && isHookStatic && mParameterTypes.length == 0) {
+            throw new HookerStructErr("An instance method must have at least one parameter to save this");
+          }
           targetClass = getTargetClass(defaultClass, className, targetStatic ? null : (isHookStatic ? mParameterTypes[0] : null), loader);
         } catch (ClassNotFoundException e) {
           log("Cannot find target class for " + m + ":" + e);
@@ -2166,6 +2169,21 @@ public final class Albatross {
       try {
         return classLoader.loadClass(className);
       } catch (ClassNotFoundException e) {
+      } catch (Throwable throwable) {
+        Albatross.log("find class err：" + className, throwable);
+      }
+    }
+    return null;
+  }
+
+  public static Class<?> findClassFromApplication(String className) {
+    Application application = currentApplication();
+    if (application != null) {
+      try {
+        return application.getClassLoader().loadClass(className);
+      } catch (ClassNotFoundException e) {
+      } catch (Throwable throwable) {
+        Albatross.log("find class err：" + className, throwable);
       }
     }
     return null;

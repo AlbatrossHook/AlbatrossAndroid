@@ -19,7 +19,7 @@ package qing.albatross.exception;
 
 public class HookerStructErr extends AlbatrossErr {
 
-  HookerStructErr(String desc) {
+  public HookerStructErr(String desc) {
     super(desc);
   }
 }
