@@ -48,6 +48,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -578,9 +579,12 @@ public final class Albatross {
   public static final int FLAG_DISABLE_LOG = 0x400;
   public static final int FLAG_INJECT = 0x800;
   public static final int FLAG_INIT_RPC = 0x1000;
+  public static final int FLAG_CALL_CHAIN = 0x2000;
 
 
   private static int albatross_flags = 0;
+
+  public static final String ALBATROSS_INIT_FLAGS_KEY = "albatross_init_flags";
 
   public static boolean loadLibrary(String library, int loadFlags) {
     if ((initStatus & STATUS_INIT_OK) != STATUS_INIT_OK) {
@@ -590,6 +594,7 @@ public final class Albatross {
       try {
         getRuntimeISA();
       } catch (Throwable e) {
+        System.setProperty(ALBATROSS_INIT_FLAGS_KEY, loadFlags + "");
         System.loadLibrary(library);
         getRuntimeISA();
       }
@@ -698,6 +703,8 @@ public final class Albatross {
     return 12;
   }
 
+  private static int initResult;
+
   @SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
   public static boolean init(int flags) {
     if ((initStatus & (STATUS_INIT_OK | STATUS_INIT_FAIL)) != 0) {
@@ -709,7 +716,7 @@ public final class Albatross {
         Debug.waitForDebugger();
       }
       Method initNativeMethod = Albatross.class.getDeclaredMethod("initMethodNative", Method.class, Method.class, int.class, Class.class);
-      int initResult = initMethodNative(initNativeMethod, Albatross.class.getDeclaredMethod("initFieldOffsetNative", Field.class, Field.class, int.class, Class.class),
+      initResult = initMethodNative(initNativeMethod, Albatross.class.getDeclaredMethod("initFieldOffsetNative", Field.class, Field.class, int.class, Class.class),
           flags, Albatross.class);
       if (InitResultFlag.INIT_OK.isSet(initResult)) {
         initStatus |= STATUS_INIT_OK;
@@ -739,7 +746,7 @@ public final class Albatross {
             replace(ensureClassInitialized, ensureClassInitializedVisibly);
             ensureClassInitialized = ensureClassInitializedVisibly;
           }
-          new MethodStubs();
+          ensureClassInitialized(MethodStubs.class);
           registerMethodNative(ensureClassInitialized, $Image.onClassInit.method,
               $Image.appendLoader.method, $Image.checkMethodReturn.method, InstructionListenerH.onEnter.method, MethodStubs.class);
           int sdkInt = Build.VERSION.SDK_INT;
@@ -810,6 +817,26 @@ public final class Albatross {
       Albatross.log("Albatross init:" + e, e);
     }
     return false;
+  }
+
+  public static String supportFeatures() {
+    StringBuilder builder = new StringBuilder();
+    if (InitResultFlag.JIT_SUPPORTED.isSet(initResult)) {
+      builder.append("jit,");
+    }
+    if (InitResultFlag.AOT_SUPPORTED.isSet(initResult)) {
+      builder.append("aot,");
+    }
+    if (InitResultFlag.BACKUP_CALL_JIT.isSet(initResult)) {
+      builder.append("jit_backupCall,");
+    }
+    if (InitResultFlag.INS_ENABLE.isSet(initResult)) {
+      builder.append("instruction,");
+    }
+    if (builder.length() > 0) {
+      return builder.substring(0, builder.length() - 1);
+    }
+    return "";
   }
 
   private static void initClassLoader() throws AlbatrossException {
@@ -2115,16 +2142,18 @@ public final class Albatross {
 
   public static final String TAG = Albatross.class.getSimpleName();
 
-  private static List<ClassLoader> classLoaderList = new ArrayList<>();
+  private static final List<ClassLoader> classLoaderList = new ArrayList<>();
 
   @Alias("appendLoader")
-  synchronized static boolean appendLoader(ClassLoader loader) {
-    if (classLoaderList.contains(loader))
-      return false;
-    ClassLoader classLoader = loader.getParent();
-    if (classLoader == null && !(loader instanceof BaseDexClassLoader))
-      return false;
-    classLoaderList.add(loader);
+  static boolean appendLoader(ClassLoader loader) {
+    synchronized (classLoaderList) {
+      if (classLoaderList.contains(loader))
+        return false;
+      ClassLoader classLoader = loader.getParent();
+      if (classLoader == null && !(loader instanceof BaseDexClassLoader))
+        return false;
+      classLoaderList.add(loader);
+    }
     return true;
   }
 
@@ -2165,12 +2194,23 @@ public final class Albatross {
   }
 
   public static Class<?> findClass(String className) {
-    for (ClassLoader classLoader : classLoaderList) {
-      try {
-        return classLoader.loadClass(className);
-      } catch (ClassNotFoundException e) {
-      } catch (Throwable throwable) {
-        Albatross.log("find class err：" + className, throwable);
+    try {
+      for (ClassLoader classLoader : classLoaderList) {
+        try {
+          return classLoader.loadClass(className);
+        } catch (ClassNotFoundException ignore) {
+        } catch (Throwable throwable) {
+          Albatross.log("find class err：" + className, throwable);
+        }
+      }
+    } catch (ConcurrentModificationException m) {
+      for (ClassLoader classLoader : classLoaderList.toArray(new ClassLoader[0])) {
+        try {
+          return classLoader.loadClass(className);
+        } catch (ClassNotFoundException ignore) {
+        } catch (Throwable throwable) {
+          Albatross.log("find class err：" + className, throwable);
+        }
       }
     }
     return null;
