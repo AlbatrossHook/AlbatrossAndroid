@@ -45,6 +45,8 @@ public class AlbatrossDemoMainActivity extends Activity {
 
   private static native boolean registerAlbatrossLib(Class<?> albatross);
 
+  static int albatrossInitFlags = Albatross.FLAG_CALL_CHAIN;
+
   static void initAlbatross() {
     if (isLoad)
       return;
@@ -52,10 +54,10 @@ public class AlbatrossDemoMainActivity extends Activity {
     try {
       System.loadLibrary("api");
       registerAlbatrossLib(Albatross.class);
-      Albatross.init(0);
+      Albatross.init(albatrossInitFlags);
     } catch (Throwable e) {
       if (BuildConfig.DEBUG)
-        Albatross.loadLibrary("albatross_base");
+        Albatross.loadLibrary("albatross_base", albatrossInitFlags);
       else
         throw e;
     }
@@ -107,9 +109,9 @@ public class AlbatrossDemoMainActivity extends Activity {
 
   public void debug(View view) {
     if (Debug.isDebuggerConnected()) {
-      textView.setText("debugger:"+BuildConfig.DEBUG);
+      textView.setText("debugger:" + BuildConfig.DEBUG);
     } else {
-      textView.setText("no debugger:"+BuildConfig.DEBUG);
+      textView.setText("no debugger:" + BuildConfig.DEBUG);
     }
   }
 

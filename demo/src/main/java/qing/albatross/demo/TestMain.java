@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import qing.albatross.annotation.ConstructorBackup;
 import qing.albatross.annotation.ConstructorHook;
+import qing.albatross.annotation.ExecOption;
 import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.MethodBackup;
 import qing.albatross.annotation.MethodHook;
@@ -87,8 +88,8 @@ public class TestMain {
     @FieldRef
     public int z;
 
-    @MethodBackup
-    @MethodHook
+    @MethodBackup(targetExec = ExecOption.DECOMPILE)
+    @MethodHook(hookerExec = ExecOption.DECOMPILE)
     private void testCall(int i) {
       testCall(i + 2);
       assert this.z == i + 2;
@@ -138,6 +139,7 @@ public class TestMain {
       System.out.println("debugger isDebuggerConnected");
     }
     Albatross.loadLibrary(null);
+    HookChainTest.test();
     PrimCoarseMatch.test(hook);
     BinderHook.test(hook);
     FieldRefTest.test(hook);
