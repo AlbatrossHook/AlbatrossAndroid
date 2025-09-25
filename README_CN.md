@@ -311,7 +311,7 @@ public static void test() throws AlbatrossErr {
 - **代码分析**：通过指令跟踪和分析运行逻辑
 
 ## 未来计划
-潜在功能包括~~Java指令Hook~~、Java代码追踪、动态Hook（单个方法可Hook多个类的方法）、调用链Hook和取消Hook能力。然而，由于精力限制，这些功能的实现将根据用户反馈进行优先级排序。
+潜在功能包括~~Java指令Hook~~、Java代码追踪、动态Hook（单个方法可Hook多个类的方法）、~~调用链Hook~~和取消Hook能力。然而，由于精力限制，这些功能的实现将根据用户反馈进行优先级排序。
 更多工具和文档将随后推出。敬请关注`albatross-server`、`albatross-core`、`albatross-manager`等项目的更新！
 
 ## 致谢
