@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.server;
 
 import static qing.albatross.server.UnixRpcMethodFactory.ARG_BYTE;
@@ -84,7 +81,10 @@ public class UnixRpcServer extends Thread {
 
   public UnixRpcServer(String socketPath, boolean isAbstract, Object owner) {
     this.socketPath = socketPath;
-    serverObj = createUnixServer(socketPath, owner, isAbstract);
+    if (socketPath != null && socketPath.length() > 1)
+      serverObj = createUnixServer(socketPath, owner, isAbstract);
+    else
+      serverObj = getDefaultUnixServer(owner);
   }
 
 
@@ -115,7 +115,7 @@ public class UnixRpcServer extends Thread {
       }
       return true;
     } catch (Exception e) {
-      Albatross.log("Unix Rpc Server init", e);
+      Albatross.log("Unix Rpc Server init fail from " + apiInterface.getName(), e);
       throw new RuntimeException(e);
     }
   }
@@ -130,7 +130,9 @@ public class UnixRpcServer extends Thread {
 
   static native long createUnixServer(String path, Object owner, boolean isAbstract);
 
-  static native long createUnixClient(String path, Object owner, boolean isAbstract,boolean isSubscriber);
+  static native long createUnixClient(String path, Object owner, boolean isAbstract, boolean isSubscriber);
+
+  static native long getDefaultUnixServer(Object owner);
 
   static native void destroyUnixServer(long serverObj);
 

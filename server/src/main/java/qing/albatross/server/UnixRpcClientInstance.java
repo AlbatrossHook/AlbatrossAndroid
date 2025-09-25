@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.server;
 
 public abstract class UnixRpcClientInstance {
@@ -39,12 +36,19 @@ public abstract class UnixRpcClientInstance {
     close();
   }
 
-  public void close() {
+  public synchronized void close() {
     if (client.messages != null) {
       client.continuable = false;
       client.request(() -> {
       });
     }
+  }
+
+  public boolean isClosed() {
+    if (client != null && client.messages != null) {
+      return client.isClosed();
+    }
+    return true;
   }
 
 

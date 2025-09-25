@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.server;
 
 import static qing.albatross.server.UnixRpcServer.createUnixClient;
@@ -99,6 +96,11 @@ public class UnixRpcClient extends Thread {
       subscriberObj = 0;
     }
   }
+
+  public boolean isClosed() {
+    return serverObj == 0;
+  }
+
 
   boolean init(UnixRpcClientInstance owner, Class<?> apiInterface) {
     try {

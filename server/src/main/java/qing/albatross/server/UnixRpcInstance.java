@@ -47,8 +47,10 @@ public abstract class UnixRpcInstance {
     UnixRpcServer server = UnixRpcServer.create(socketPath, this, isAbstract, api);
     if (server != null) {
       setServer(server);
-      server.setName(api.getName());
-      server.start();
+      if (socketPath != null && socketPath.length() > 1) {
+        server.setName(api.getName());
+        server.start();
+      }
       return server;
     }
     return null;
