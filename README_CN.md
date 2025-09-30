@@ -325,8 +325,19 @@ public static void test() throws AlbatrossErr {
 Apache许可证2.0
 详见[LICENSE](LICENSE)。
 
+## 交流群
+
+欢迎加入我们的QQ交流群：**478564202**
+
+在这里可以讨论：
+- 移动安全技术
+- 逆向工程
+- 风控技术
+- Albatross框架使用问题
+- 技术交流与分享
+
 ## 相关文档
 
-- [注解](docs/annotatin_reference.md) — 注解使用文档
-- [API参考](#) — 核心api用法
-- [异常处理](docs/exception_documentation.md) — 异常说明以及修复文档
+- [注解参考](docs/annotatin_reference_CN.md) — 注解使用文档
+- [API参考](docs/api_documentation_CN.md) — 核心API用法
+- [异常处理](docs/exception_documentation_CN.md) — 异常说明以及修复文档

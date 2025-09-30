@@ -316,8 +316,19 @@ Apache License 2.0
 See [LICENSE](LICENSE) for details.
 
 
+## Community
+
+Join our QQ group for discussions: **478564202**
+
+Topics we discuss include:
+- Mobile security techniques
+- Reverse engineering
+- Risk control technologies
+- Albatross framework usage
+- Technical exchanges and sharing
+
 ##  Related Documentation
 
-- [Annotations](docs/annotatin_reference.md) — Full list of hooking and configuration annotations
-- [API Reference](#) — Public methods and usage
-- [Exception Handling](docs/exception_documentation.md) — Error types and fix strategies
+- [Annotations](docs/annotatin_reference_EN.md) — Full list of hooking and configuration annotations
+- [API Reference](docs/api_documentation_EN.md) — Public methods and usage
+- [Exception Handling](docs/exception_documentation_EN.md) — Error types and fix strategies
