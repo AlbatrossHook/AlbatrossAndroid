@@ -1,3 +1,7 @@
+version 2.0.2
+ - Optimize rpc calls and support methods for binding other objects.
+ - Add some very practical methods.
+
 version 2.0.1
  - rpc server Optimization.
 
