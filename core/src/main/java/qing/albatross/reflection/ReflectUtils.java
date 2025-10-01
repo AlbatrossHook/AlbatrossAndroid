@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.reflection;
 
 import android.util.ArrayMap;
@@ -161,6 +159,16 @@ public class ReflectUtils {
       }
     }
     throw new NoSuchMethodException("Method " + name + " with subType parameters " + Arrays.asList(subArgTypes) + " not found in " + clazz);
+  }
+
+  public static Method findDeclaredMethodWithCount(Class<?> clazz, String name, int expectParamCount) throws NoSuchMethodException {
+    Method[] methods = clazz.getDeclaredMethods();
+    for (Method method : methods) {
+      if (method.getName().equals(name) && method.getParameterCount() == expectParamCount) {
+        return method;
+      }
+    }
+    throw new NoSuchMethodException("Method " + name + " not found in " + clazz);
   }
 
 

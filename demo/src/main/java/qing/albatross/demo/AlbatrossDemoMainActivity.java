@@ -63,6 +63,10 @@ public class AlbatrossDemoMainActivity extends Activity {
     }
     boolean res = Albatross.initRpcClass(UnixRpcServer.class);
     assert res;
+    String packageName = Albatross.currentPackageName();
+    String processName = Albatross.currentProcessName();
+    String profileFile = Albatross.getProfileFilePath();
+    Albatross.log("[*] " + packageName + ":" + processName + ":" + profileFile);
   }
 
   public void initByLoad(View view) {

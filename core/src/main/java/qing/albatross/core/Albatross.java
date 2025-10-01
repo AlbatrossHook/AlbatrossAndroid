@@ -13,28 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.core;
 
 
 import static qing.albatross.annotation.CallWay.CURRENT;
-import static qing.albatross.annotation.ExecOption.AOT;
-import static qing.albatross.annotation.ExecOption.DECOMPILE;
-import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
-import static qing.albatross.annotation.ExecOption.DISABLE_JIT;
-import static qing.albatross.annotation.ExecOption.DO_NOTHING;
-import static qing.albatross.annotation.ExecOption.INTERPRETER;
-import static qing.albatross.annotation.ExecOption.JIT_OPTIMIZED;
-import static qing.albatross.annotation.ExecOption.NATIVE_CODE;
-import static qing.albatross.annotation.ExecOption.RECOMPILE_OPTIMIZED;
+import static qing.albatross.annotation.ExecOption.*;
 import static qing.albatross.core.InstructionListener.hookInstructionNative;
 import static qing.albatross.reflection.ReflectUtils.getArgumentTypesFromString;
 
 import android.annotation.SuppressLint;
 import android.app.Application;
+import android.app.Instrumentation;
 import android.content.Context;
 import android.os.Build;
 import android.os.Debug;
+import android.os.Handler;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
@@ -187,13 +180,28 @@ public final class Albatross {
   }
 
 
-  public static final String HOOK_SUFFIX = "\\$Hook";
-  public static final String BACKUP_SUFFIX = "\\$Backup";
+  // String constants
+  public static final String HOOK_SUFFIX = "$Hook";
+  public static final String BACKUP_SUFFIX = "$Backup";
+  public static final String TAG = Albatross.class.getSimpleName();
+  public static final String ALBATROSS_INIT_FLAGS_KEY = "albatross_init_flags";
 
-  public final static int STATUS_INIT_OK = 1;
-  public final static int STATUS_DISABLED = 2;
-  public final static int STATUS_NOT_INIT = 4;
-  public final static int STATUS_INIT_FAIL = 8;
+  // Status constants
+  public static final int STATUS_INIT_OK = 1;
+  public static final int STATUS_DISABLED = 2;
+  public static final int STATUS_NOT_INIT = 4;
+  public static final int STATUS_INIT_FAIL = 8;
+
+
+  // Special return values
+  public static final int CLASS_ALREADY_HOOK = -1000000000;
+  public static final int REDUNDANT_ELEMENT = -1000000001;
+
+  // Search flags
+  public static final int SEARCH_STATIC = 1;
+  public static final int SEARCH_INSTANCE = 2;
+  public static final int SEARCH_ALL = SEARCH_STATIC | SEARCH_INSTANCE;
+
 
   //note:these two fields must be placed right next to each other!
   public static int initStatus = STATUS_NOT_INIT;
@@ -201,6 +209,12 @@ public final class Albatross {
 
   public static boolean loaderFromCaller = false;
 
+  /**
+   * Gets the target class for a hooker class based on its TargetClass annotation.
+   *
+   * @param hooker the hooker class to get target class for
+   * @return the target class, or null if no TargetClass annotation is present
+   */
   public static Class<?> getHookerTargetClass(Class<?> hooker) {
     TargetClass targetClass = hooker.getAnnotation(TargetClass.class);
     if (targetClass != null) {
@@ -255,6 +269,7 @@ public final class Albatross {
     return dependencies;
   }
 
+  // Architecture constants
   public static final int kArm = 1;
   public static final int kArm64 = 2;
   public static final int kX86 = 3;
@@ -307,10 +322,27 @@ public final class Albatross {
     return dependencies;
   }
 
+  /**
+   * Replaces a target method with a hook method without creating a backup.
+   *
+   * @param target the target method to replace
+   * @param hook   the hook method to replace with
+   * @return true if the replacement was successful
+   * @throws AlbatrossException if the replacement fails
+   */
   public static boolean replace(Member target, Method hook) throws AlbatrossException {
     return backupAndHook(target, hook, null, true, true, null, DO_NOTHING, DO_NOTHING);
   }
 
+  /**
+   * Backs up a target method and replaces it with a hook method.
+   *
+   * @param target the target method to backup and replace
+   * @param hook   the hook method to replace with
+   * @param backup the backup method to store the original implementation
+   * @return true if the backup and hook was successful
+   * @throws AlbatrossException if the operation fails
+   */
   public static boolean backupAndHook(Member target, Method hook, Method backup) throws AlbatrossException {
     return backupAndHook(target, hook, backup, true, true, null, DO_NOTHING, DO_NOTHING);
   }
@@ -581,10 +613,7 @@ public final class Albatross {
   public static final int FLAG_INIT_RPC = 0x1000;
   public static final int FLAG_CALL_CHAIN = 0x2000;
 
-
   private static int albatross_flags = 0;
-
-  public static final String ALBATROSS_INIT_FLAGS_KEY = "albatross_init_flags";
 
   public static boolean loadLibrary(String library, int loadFlags) {
     if ((initStatus & STATUS_INIT_OK) != STATUS_INIT_OK) {
@@ -669,6 +698,12 @@ public final class Albatross {
 
     @ByName("currentApplication")
     static StaticMethodDef<Application> currentApplication;
+
+    @ByName("currentPackageName")
+    static StaticMethodDef<String> currentPackageName;
+
+    @ByName("currentProcessName")
+    static StaticMethodDef<String> currentProcessName;
 
     @ByName("backup")
     static StaticMethodDef<Boolean> backup;
@@ -762,6 +797,8 @@ public final class Albatross {
           Class<?> ActivityThread = Class.forName("android.app.ActivityThread");
           addToVisit(ActivityThread);
           Albatross.backup(ActivityThread.getDeclaredMethod("currentApplication"), $Image.currentApplication.method, false, false, null, AOT | DISABLE_JIT, CURRENT);
+          Albatross.backup(ActivityThread.getDeclaredMethod("currentPackageName"), $Image.currentPackageName.method, false, false, null, AOT | DISABLE_JIT, CURRENT);
+          Albatross.backup(ActivityThread.getDeclaredMethod("currentProcessName"), $Image.currentProcessName.method, false, false, null, AOT | DISABLE_JIT, CURRENT);
           defaultHookerBackupExecMode = INTERPRETER;
           if (Debug.isDebuggerConnected() || containsFlags(FLAG_NO_COMPILE)) {
             albatross_flags |= FLAG_NO_COMPILE;
@@ -802,6 +839,7 @@ public final class Albatross {
           pendingMap = new HashMap<>();
           initClassLoader();
           Albatross.hookClassInternal(MethodCallHook.Image.class, MethodCallHook.class.getClassLoader(), MethodCallHook.class, null);
+          Albatross.hookClassInternal(ActivityThreadH.class, ActivityThread.getClassLoader(), ActivityThread, null);
         } finally {
           transactionEnd(true);
         }
@@ -820,7 +858,7 @@ public final class Albatross {
   }
 
   public static String supportFeatures() {
-    StringBuilder builder = new StringBuilder();
+    StringBuilder builder = new StringBuilder(64);
     if (InitResultFlag.JIT_SUPPORTED.isSet(initResult)) {
       builder.append("jit,");
     }
@@ -906,8 +944,8 @@ public final class Albatross {
 
 
   private static String getSplitValue(String split, String name) {
-    String[] names = name.split(split);
-    return names[0];
+    int index = name.indexOf(split);
+    return index > 0 ? name.substring(0, index) : name;
   }
 
   private static Class<?> getTargetClass(Class<?> targetClass, String[] className, Class<?> defaultClass, ClassLoader loader) throws ClassNotFoundException {
@@ -969,6 +1007,8 @@ public final class Albatross {
   }
 
   public static native boolean disableMethod(Method method, boolean throwException);
+
+
 
 
   public static int hookClass() {
@@ -1128,9 +1168,6 @@ public final class Albatross {
       }
     }
   }
-
-  public static final int CLASS_ALREADY_HOOK = -1000000000;
-  public static final int REDUNDANT_ELEMENT = -1000000001;
 
   public static void disableAlbatross() {
     initStatus |= STATUS_DISABLED;
@@ -2140,8 +2177,6 @@ public final class Albatross {
 
   private static native void measureLayoutNative(Method method);
 
-  public static final String TAG = Albatross.class.getSimpleName();
-
   private static final List<ClassLoader> classLoaderList = new ArrayList<>();
 
   @Alias("appendLoader")
@@ -2159,6 +2194,47 @@ public final class Albatross {
 
   @Alias("currentApplication")
   public static native Application currentApplication();
+
+  @Alias("currentPackageName")
+  public static native String currentPackageName();
+
+
+  @Alias("currentProcessName")
+  public native static String currentProcessName();
+
+
+  @TargetClass(className = "android.app.ActivityThread")
+  public static class ActivityThreadH {
+
+    @MethodBackup
+    private native Instrumentation getInstrumentation();
+
+    @StaticMethodBackup
+    public native static ActivityThreadH currentActivityThread();
+
+    @StaticMethodBackup
+    public native static String currentOpPackageName();
+
+    @MethodBackup
+    private native Handler getHandler();
+
+    @MethodBackup
+    private native String getProfileFilePath();
+
+  }
+
+  public static Instrumentation currentInstrumentation() {
+    return ActivityThreadH.currentActivityThread().getInstrumentation();
+  }
+
+  public static Handler getMainHandler() {
+    return ActivityThreadH.currentActivityThread().getHandler();
+  }
+
+  public static String getProfileFilePath() {
+    return ActivityThreadH.currentActivityThread().getProfileFilePath();
+  }
+
 
   public static boolean syncAppLoader() {
     appendLoader(Albatross.class.getClassLoader());
@@ -2208,6 +2284,7 @@ public final class Albatross {
         try {
           return classLoader.loadClass(className);
         } catch (ClassNotFoundException ignore) {
+          // Expected, continue to next loader
         } catch (Throwable throwable) {
           Albatross.log("find class err：" + className, throwable);
         }
@@ -2225,13 +2302,14 @@ public final class Albatross {
       } catch (Throwable throwable) {
         Albatross.log("find class err：" + className, throwable);
       }
+    } else {
+      try {
+        return Class.forName(className);
+      } catch (ClassNotFoundException e) {
+      }
     }
     return null;
   }
-
-  public static final int SEARCH_STATIC = 1;
-  public static final int SEARCH_INSTANCE = 2;
-  public static final int SEARCH_ALL = SEARCH_STATIC | SEARCH_INSTANCE;
 
   public static native Method findMethod(Class<?> clz, Class<?>[] argTypes, int isStatic);
 
