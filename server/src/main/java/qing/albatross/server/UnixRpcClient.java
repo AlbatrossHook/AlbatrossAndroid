@@ -46,7 +46,7 @@ public class UnixRpcClient extends Thread {
       UnixRpcClient client = new UnixRpcClient(socketPath, isAbstract, owner);
       if (client.serverObj > 40960 || client.serverObj < 0) {
         client.subscriberObj = createUnixClient(socketPath, owner, isAbstract, true);
-        if (client.init(owner, api)) {
+        if (client.registerApi(0, owner, api)) {
           return client;
         } else {
           destroyUnixClient(client.serverObj);
@@ -102,7 +102,7 @@ public class UnixRpcClient extends Thread {
   }
 
 
-  boolean init(UnixRpcClientInstance owner, Class<?> apiInterface) {
+  boolean registerApi(int id, Object owner, Class<?> apiInterface) {
     try {
       Map<String, UnixRpcMethodFactory.RpcMethod> rpcMethods = UnixRpcMethodFactory.generateRpcMethods(
           apiInterface);
@@ -117,7 +117,7 @@ public class UnixRpcClient extends Thread {
           if (Modifier.isNative(targetMethod.getModifiers())) {
             throw new RuntimeException("rpc broadcast method " + rpcMethodName + " should not be native");
           }
-          registerClientBroadcast(subscriberObj, rpcMethodName, targetMethod, rpcMethod.args, rpcMethod.ret);
+          registerClientBroadcast(id, subscriberObj, rpcMethodName, targetMethod, rpcMethod.args, rpcMethod.ret);
         }
       }
       return true;

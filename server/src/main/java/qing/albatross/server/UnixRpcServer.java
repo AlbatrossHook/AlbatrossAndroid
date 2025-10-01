@@ -68,7 +68,7 @@ public class UnixRpcServer extends Thread {
       }
       UnixRpcServer server = new UnixRpcServer(socketPath, isAbstract, owner);
       if (server.serverObj > 40960 || server.serverObj < 0) {
-        if (server.init(owner, api)) {
+        if (server.registerApi(0, owner, api)) {
           owner.setServer(server);
           return server;
         }
@@ -99,7 +99,14 @@ public class UnixRpcServer extends Thread {
     destroyUnixServer(serverObj);
   }
 
-  boolean init(UnixRpcInstance owner, Class<?> apiInterface) {
+  public void registerApi(Object instance, Class<?> apiInterface) {
+    int id = registerInstance(serverObj, instance);
+    assert ReflectUtils.isInterfaceOf(instance.getClass(),apiInterface);
+    registerApi(id, instance, apiInterface);
+  }
+
+
+  boolean registerApi(int id, Object owner, Class<?> apiInterface) {
     try {
       Map<String, UnixRpcMethodFactory.RpcMethod> rpcMethods = UnixRpcMethodFactory.generateRpcMethods(
           apiInterface);
@@ -107,7 +114,7 @@ public class UnixRpcServer extends Thread {
         UnixRpcMethodFactory.RpcMethod rpcMethod = entry.getValue();
         Method method = rpcMethod.method;
         if (method.getAnnotation(Broadcast.class) == null) {
-          registerMethod(serverObj, rpcMethod.getName(), method, rpcMethod.args, rpcMethod.ret);
+          registerMethod(id, serverObj, rpcMethod.getName(), method, rpcMethod.args, rpcMethod.ret);
         } else {
           Method targetMethod = ReflectUtils.findMethod(owner.getClass(), method.getName(), method.getParameterTypes());
           registerBroadcast(serverObj, rpcMethod.getName(), targetMethod, rpcMethod.args, rpcMethod.ret);
@@ -120,13 +127,16 @@ public class UnixRpcServer extends Thread {
     }
   }
 
-  static native byte registerMethod(long serverObj, String name, Object method, byte[] args, byte retType);
+  static native byte registerMethod(int instanceId, long serverObj, String name, Object method, byte[] args, byte retType);
 
   static native byte registerClientMethod(long serverObj, String name, Object method, byte[] args, byte retType);
 
   static native byte registerBroadcast(long serverObj, String name, Object method, byte[] args, byte retType);
 
-  static native byte registerClientBroadcast(long serverObj, String name, Object method, byte[] args, byte retType);
+  static native byte registerClientBroadcast(int instanceId, long serverObj, String name, Object method, byte[] args, byte retType);
+
+  static native int registerInstance(long serverObj, Object instance);
+
 
   static native long createUnixServer(String path, Object owner, boolean isAbstract);
 

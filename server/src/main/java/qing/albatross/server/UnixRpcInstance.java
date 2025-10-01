@@ -17,11 +17,14 @@ package qing.albatross.server;
 
 import static qing.albatross.server.UnixRpcMethodFactory.ARG_BYTE;
 
+import android.app.Application;
 import android.util.ArrayMap;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+
+import qing.albatross.core.Albatross;
 
 public abstract class UnixRpcInstance {
   Map<Long, UnixRpcServer> servers = new ArrayMap<>();
@@ -54,6 +57,12 @@ public abstract class UnixRpcInstance {
       return server;
     }
     return null;
+  }
+
+  public void registerApi(Object instance, Class<?> api) {
+    for (UnixRpcServer server : servers.values()) {
+      server.registerApi(instance, api);
+    }
   }
 
 
@@ -93,4 +102,10 @@ public abstract class UnixRpcInstance {
       servers.remove(serverObj);
     }
   }
+
+  public String getPackageName() {
+    return Albatross.currentPackageName();
+  }
+
+  public native void send(String content, String exception);
 }
