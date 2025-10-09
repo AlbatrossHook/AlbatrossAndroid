@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package qing.albatross.core;
 
 
@@ -1235,7 +1236,9 @@ public final class Albatross {
     int targetDefaultExecOption = defaultTargetExecMode;
     boolean isDebug = Debug.isDebuggerConnected();
     TargetClass targetClassAnno = hooker.getAnnotation(TargetClass.class);
+    boolean isMirror = true;
     if (targetClassAnno != null) {
+      isMirror = targetClassAnno.image();
       if (!isDebug) {
         int hookerExecOption = targetClassAnno.hookerExec();
         int targetExecOption = targetClassAnno.targetExec();
@@ -1274,13 +1277,12 @@ public final class Albatross {
         loader = defaultClass.getClassLoader();
       }
     }
-    boolean isMirror = true;
     if (defaultClass != null) {
       if (defaultClass.isInterface())
         throw new HookInterfaceErr(defaultClass);
       if (!(defaultClass.getClassLoader() instanceof BaseDexClassLoader)) {
         addToVisit(defaultClass);
-      } else {
+      } else if (targetClassAnno == null) {
         isMirror = hooker != defaultClass;
         if (isMirror) {
           Class<?> superclass = hooker.getSuperclass();

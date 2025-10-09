@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.annotation;
 
 import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
@@ -33,4 +32,5 @@ public @interface TargetClass {
   int targetExec() default DEFAULT_OPTION;
   int hookerBackupExec() default DEFAULT_OPTION;
   boolean required() default true;
+  boolean image() default true;
 }

@@ -139,6 +139,7 @@ public class TestMain {
       System.out.println("debugger isDebuggerConnected");
     }
     Albatross.loadLibrary(null);
+    ExtendImplTest.test();
     AotHookChainTest.test();
     HookChainTest.test();
     PrimCoarseMatch.test(hook);
