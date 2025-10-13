@@ -41,6 +41,7 @@ Albatross adheres to the following design goals:
     - Method hook: API 24-36 (7.0-16)
     - File access: API 26-36 (8.0-16)
     - ❌ Unsupported: API 23 and below (6.0 Marshmallow and earlier)
+    - Integration: It is necessary to ensure that the target application process does not have an Lsposed environment. When using frida injection, the java environment of frida needs to be cleared
 - **Architectures**: x86, x86_64, ARM, ARM64
 
 ###  Security & Stability
