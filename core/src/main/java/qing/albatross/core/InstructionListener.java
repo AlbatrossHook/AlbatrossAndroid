@@ -13,23 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.core;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 
 import qing.albatross.annotation.Alias;
 
 
-public class InstructionListener {
-  Member member;
+public class InstructionListener extends MethodInvokeFrame {
+
   InstructionCallback callback;
   long listenerId = 0;
-  int numberVRegs = -1;
-  int firstArgReg = -1;
 
 
   public synchronized void unHook() {
@@ -37,42 +31,6 @@ public class InstructionListener {
       unHookInstructionNative(listenerId);
       listenerId = 0;
     }
-  }
-
-  public int getNumberVRegs(long invocationContext) {
-    if (numberVRegs >= 0)
-      return numberVRegs;
-    numberVRegs = NumberOfVRegs(invocationContext);
-    return numberVRegs;
-  }
-
-  public int getFirstArgReg(long invocationContext) {
-    if (firstArgReg >= 0)
-      return firstArgReg;
-    if (member instanceof Method) {
-      Method method = (Method) member;
-      int arg_count = method.getParameterCount();
-      if (!Modifier.isStatic(method.getModifiers()))
-        arg_count += 1;
-      firstArgReg = getNumberVRegs(invocationContext) - arg_count;
-    } else {
-      Constructor<?> constructor = (Constructor<?>) member;
-      int arg_count = constructor.getParameterTypes().length + 1;
-      firstArgReg = getNumberVRegs(invocationContext) - arg_count;
-    }
-    return firstArgReg;
-  }
-
-  public int getArgReg(long invocationContext, int i) {
-    int idx = getFirstArgReg(invocationContext) + i;
-    assert idx < numberVRegs;
-    return idx;
-  }
-
-  public int getArgRegTwoWord(long invocationContext, int i) {
-    int idx = getFirstArgReg(invocationContext) + i;
-    assert idx + 1 < numberVRegs;
-    return idx;
   }
 
   //All these native methods register by Albatross.registerMethodNative
@@ -103,7 +61,7 @@ public class InstructionListener {
 
   public static native void SetVRegReference(long invocationContext, int i, Object val);
 
-  static native String dumpSmaliString(long invocationContext,int dexPc);
+  static native String dumpSmaliString(long invocationContext, int dexPc);
 
   @Alias("onEnter")
   private void onEnter(Object self, int dexPc, long invocationContext) {

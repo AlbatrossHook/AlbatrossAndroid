@@ -13,23 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.core;
 
 import java.lang.reflect.Modifier;
 
 public class InvocationContext {
-  private final long invocationContext;
-  private final InstructionListener listener;
+  protected long invocationContext;
+  protected final MethodInvokeFrame methodFrame;
 
-  public InvocationContext(long invocationContext, InstructionListener listener) {
+  public InvocationContext(long invocationContext, MethodInvokeFrame listener) {
     this.invocationContext = invocationContext;
-    this.listener = listener;
+    this.methodFrame = listener;
   }
 
 
   public int numberOfVRegs() {
-    return listener.getNumberVRegs(invocationContext);
+    return methodFrame.getNumberVRegs(invocationContext);
   }
 
   public String smaliString() {
@@ -80,44 +79,44 @@ public class InvocationContext {
 
 
   public boolean getParamBool(int i) {
-    return InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i)) != 0;
+    return InstructionListener.GetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i)) != 0;
   }
 
   public char getParamChar(int i) {
-    return (char) InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
+    return (char) InstructionListener.GetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i));
   }
 
   public byte getParamByte(int i) {
-    return (byte) InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
+    return (byte) InstructionListener.GetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i));
   }
 
   public short getParamShort(int i) {
-    return (short) InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
+    return (short) InstructionListener.GetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i));
   }
 
 
   public int getParamInt(int i) {
-    return InstructionListener.GetVReg(invocationContext, listener.getArgReg(invocationContext, i));
+    return InstructionListener.GetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i));
   }
 
   public float getParamFloat(int i) {
-    return InstructionListener.GetVRegFloat(invocationContext, listener.getArgReg(invocationContext, i));
+    return InstructionListener.GetVRegFloat(invocationContext, methodFrame.getArgReg(invocationContext, i));
   }
 
   public long getParamLong(int i) {
-    return InstructionListener.GetVRegLong(invocationContext, listener.getArgRegTwoWord(invocationContext, i));
+    return InstructionListener.GetVRegLong(invocationContext, methodFrame.getArgRegTwoWord(invocationContext, i));
   }
 
   public double getParamDouble(int i) {
-    return InstructionListener.GetVRegDouble(invocationContext, listener.getArgRegTwoWord(invocationContext, i));
+    return InstructionListener.GetVRegDouble(invocationContext, methodFrame.getArgRegTwoWord(invocationContext, i));
   }
 
   public Object getParamObject(int i) {
-    return InstructionListener.GetVRegReference(invocationContext, listener.getArgReg(invocationContext, i));
+    return InstructionListener.GetVRegReference(invocationContext, methodFrame.getArgReg(invocationContext, i));
   }
 
   public Object getThis() {
-    if (Modifier.isStatic(listener.member.getModifiers()))
+    if (Modifier.isStatic(methodFrame.member.getModifiers()))
       return null;
     return getParamObject(0);
   }
@@ -170,40 +169,44 @@ public class InvocationContext {
 
 
   public int setParamBoolean(int i, boolean val) {
-    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val ? 1 : 0);
+    return InstructionListener.SetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i), val ? 1 : 0);
   }
 
   public int setParamChar(int i, char val) {
-    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+    return InstructionListener.SetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i), val);
   }
 
   public int setParamByte(int i, byte val) {
-    return (byte) InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+    return (byte) InstructionListener.SetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i), val);
   }
 
   public int setParamShort(int i, short val) {
-    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+    return InstructionListener.SetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i), val);
   }
 
 
   public int setParamInt(int i, int val) {
-    return InstructionListener.SetVReg(invocationContext, listener.getArgReg(invocationContext, i), val);
+    return InstructionListener.SetVReg(invocationContext, methodFrame.getArgReg(invocationContext, i), val);
   }
 
   public float setParamFloat(int i, float val) {
-    return InstructionListener.SetVRegFloat(invocationContext, listener.getArgReg(invocationContext, i), val);
+    return InstructionListener.SetVRegFloat(invocationContext, methodFrame.getArgReg(invocationContext, i), val);
   }
 
   public long setParamLong(int i, long val) {
-    return InstructionListener.SetVRegLong(invocationContext, listener.getArgRegTwoWord(invocationContext, i), val);
+    return InstructionListener.SetVRegLong(invocationContext, methodFrame.getArgRegTwoWord(invocationContext, i), val);
   }
 
   public double setParamDouble(int i, double val) {
-    return InstructionListener.SetVRegDouble(invocationContext, listener.getArgRegTwoWord(invocationContext, i), val);
+    return InstructionListener.SetVRegDouble(invocationContext, methodFrame.getArgRegTwoWord(invocationContext, i), val);
   }
 
   public void setParamObject(int i, Object val) {
-    InstructionListener.SetVRegReference(invocationContext, listener.getArgReg(invocationContext, i), val);
+    InstructionListener.SetVRegReference(invocationContext, methodFrame.getArgReg(invocationContext, i), val);
+  }
+
+  public Object[] getArguments() {
+    return methodFrame.getArguments(invocationContext);
   }
 
 
