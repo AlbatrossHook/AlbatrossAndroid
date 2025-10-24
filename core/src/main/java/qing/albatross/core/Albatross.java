@@ -13,9 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.core;
-
 
 import static qing.albatross.annotation.CallWay.CURRENT;
 import static qing.albatross.annotation.ExecOption.*;
@@ -90,6 +88,7 @@ import qing.albatross.exception.RequiredInstanceErr;
 import qing.albatross.exception.RequiredMethodErr;
 import qing.albatross.exception.VirtualCallBackupErr;
 import qing.albatross.reflection.BooleanFieldDef;
+import qing.albatross.reflection.BooleanMethodDef;
 import qing.albatross.reflection.ByteFieldDef;
 import qing.albatross.reflection.CharFieldDef;
 import qing.albatross.reflection.ConstructorDef;
@@ -225,6 +224,12 @@ public final class Albatross {
   }
 
   private static boolean checkTargetClass(Set<Class<?>> dependencies, Class<?> hooker, Class<?> expectClass) throws AlbatrossErr {
+    if (expectClass != null) {
+      while (hooker.isArray() && expectClass.isArray()) {
+        hooker = hooker.getComponentType();
+        expectClass = expectClass.getComponentType();
+      }
+    }
     TargetClass targetClass = hooker.getAnnotation(TargetClass.class);
     if (targetClass != null) {
       Class<?> t = getTargetClassFromAnnotation(targetClass, expectClass.getClassLoader());
@@ -237,8 +242,10 @@ public final class Albatross {
         if (t.isInterface())
           t = expectClass;
       }
-      if (addAssignableHooker(hooker, t)) {
-        dependencies.add(hooker);
+      if (dependencies != null) {
+        if (addAssignableHooker(hooker, t)) {
+          dependencies.add(hooker);
+        }
       }
       return true;
     }
@@ -279,6 +286,8 @@ public final class Albatross {
   public static native int getRuntimeISA();
 
   public native static boolean initRpcClass(Class<?> clz);
+
+  public static native boolean registerOceanTracker(Class<?> ocean);
 
   public static boolean addAssignableHooker(Class<?> hooker, Class<?> targetClass) throws AlbatrossErr {
     int setResult = setHookerAssignableNative(hooker, targetClass);
@@ -478,9 +487,20 @@ public final class Albatross {
 
   static native void unHookMethodNative(long callbackId);
 
-  private synchronized static native int unHookNative(Object target, Method hook, Method backup);
+  private synchronized static native int unhookNative(Member target, Method hook, Method backup);
+
+  public static boolean unhookMethod(Member target, Method hook, Method backup) {
+    Albatross.transactionBegin();
+    int res = unhookNative(target, hook, backup);
+    boolean success = res == 0;
+    Albatross.transactionEnd(success);
+    return success;
+  }
 
   private synchronized static native int backupAndHookNative(Object target, Method hook, Method backup, int targetExecMode, int hookerExecMode);
+
+
+  public static native int getMethodHookCount(Member target);
 
 
   public static InstructionListener hookInstruction(Member member, int dexPc, InstructionCallback callback) {
@@ -531,11 +551,13 @@ public final class Albatross {
   }
 
 
-  private synchronized static native int unBackupNative(Method backup);
+  private synchronized static native int unBackupNative(Method backup, int backupWay);
 
   private synchronized static native int backupNative(Object target, Method backup, int execMode, int backupWay);
 
   public synchronized static native int backupFieldNative(Field target, Field backup);
+
+  public synchronized static native int unBackupHookerFieldNative(Class<?> backupClass);
 
 
   private synchronized static native int setHookerAssignableNative(Class<?> hooker, Class<?> targetClass);
@@ -568,7 +590,7 @@ public final class Albatross {
       if ((runMode = method.getAnnotation(RunMode.class)) != null) {
         if (setMethodExecMode(method, runMode.value()))
           r += 1;
-      } else {
+      } else if (compileOption != DO_NOTHING) {
         if (setMethodExecMode(method, compileOption))
           r += 1;
       }
@@ -740,6 +762,8 @@ public final class Albatross {
   }
 
   private static int initResult;
+
+  private static final Map<ClassLoader, List<Class<?>>> hookers = new HashMap<>();
 
   @SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
   public static boolean init(int flags) {
@@ -1053,6 +1077,50 @@ public final class Albatross {
     return res;
   }
 
+  public static int unhookClass(Class<?> hooker, ClassLoader loader, Class<?> defaultClass) throws AlbatrossErr {
+    transactionBegin();
+    boolean doTask = false;
+    int res;
+    try {
+      res = unhookClassInternal(hooker, loader, defaultClass);
+      if (res >= 0) {
+        if (markUnhooked(hooker))
+          unregisterHooker(hooker);
+      }
+      doTask = true;
+    } finally {
+      transactionEnd(doTask);
+    }
+    return res;
+  }
+
+  public static int unhookClass(Class<?> hooker) throws AlbatrossErr {
+    return unhookClass(hooker, null, null);
+  }
+
+  public static int unhookClass(Class<?> hooker, Class<?> defaultClass) throws AlbatrossErr {
+    return unhookClass(hooker, defaultClass.getClassLoader(), defaultClass);
+  }
+
+  public static void unloadDex(ClassLoader dexClassLoader) {
+    List<Class<?>> dexHookers = null;
+    synchronized (hookers) {
+      dexHookers = hookers.remove(dexClassLoader);
+    }
+    if (dexHookers != null && !dexHookers.isEmpty()) {
+      Albatross.transactionBegin();
+      for (Class<?> c : dexHookers) {
+        try {
+          unhookClassInternal(c, null, null);
+        } catch (AlbatrossErr ignore) {
+        } catch (Throwable e) {
+          Albatross.log("unhook class " + c + " err", e);
+        }
+      }
+      Albatross.transactionEnd(true);
+    }
+  }
+
 
   private static Class<?>[] getArgumentTypes(Set<Class<?>> dependencies, Annotation[][] paramAnnotations, Class<?> targetClass, Class<?>[] mParameterTypes, ClassLoader loader, boolean targetStatic, boolean isHookStatic) throws ClassNotFoundException, FindMethodException, AlbatrossErr {
     Class<?>[] argTypes;
@@ -1104,8 +1172,10 @@ public final class Albatross {
           hookerClasses[i] = clz;
         } else {
           mParameterTypes[i] = realClz;
-          if (addAssignableHooker(clz, realClz))
-            dependencies.add(clz);
+          if (dependencies != null) {
+            if (addAssignableHooker(clz, realClz))
+              dependencies.add(clz);
+          }
         }
       } else if (paramAnnotations != null) {
         Annotation[] annotations = paramAnnotations[i];
@@ -1214,6 +1284,24 @@ public final class Albatross {
     }
   }
 
+  private static void registerHooker(Class<?> hooker) {
+    ClassLoader loader = hooker.getClassLoader();
+    synchronized (hookers) {
+      List<Class<?>> classLoaderHookers = hookers.computeIfAbsent(loader, k -> new ArrayList<>());
+      classLoaderHookers.add(hooker);
+    }
+  }
+
+  private static void unregisterHooker(Class<?> hooker) {
+    ClassLoader loader = hooker.getClassLoader();
+    synchronized (hookers) {
+      List<Class<?>> classLoaderHookers = hookers.get(loader);
+      if (classLoaderHookers != null) {
+        classLoaderHookers.remove(hooker);
+      }
+    }
+  }
+
   @Alias("hookClassInternal")
   private static int hookClassInternal(Class<?> hooker, ClassLoader loader, Class<?> defaultClass, Object instance) throws AlbatrossErr {
     if (initStatus > STATUS_INIT_OK) {
@@ -1223,6 +1311,7 @@ public final class Albatross {
       if (defaultClass == null || (!pendingMap.containsKey(defaultClass.getName())))
         return CLASS_ALREADY_HOOK;
     }
+    registerHooker(hooker);
     HashMap<Object, HookRecord> hookRecord = new HashMap<>();
     List<BackupRecord> backupRecords = new ArrayList<>();
     try {
@@ -1301,7 +1390,7 @@ public final class Albatross {
       banInstance(hooker);
     }
     int runModeAnnotationCount = 0;
-    int success_count = 0;
+    int successCount = 0;
     Field[] fields = hooker.getDeclaredFields();
     Set<Class<?>> dependencies = new HashSet<>();
     Map<String, Object> slotMap = new HashMap<>();
@@ -1356,9 +1445,10 @@ public final class Albatross {
                 targetType = null;
             }
             if (backupField(dependencies, targetField, field, targetType)) {
-              success_count += 1;
+              successCount += 1;
               hookerDefaultExecOption &= ~AOT;
               hookerDefaultExecOption |= INTERPRETER;
+              log("Field " + targetField);
             }
           } catch (NoSuchFieldException | FieldException e) {
             if (fieldRef.required())
@@ -1445,7 +1535,7 @@ public final class Albatross {
             }
             field.set(null, newFieldDef);
           }
-          success_count += 1;
+          successCount += 1;
         } catch (Exception e) {
           Albatross.log("Reflection", e);
         }
@@ -1879,13 +1969,13 @@ public final class Albatross {
                 }
                 if (!checkFail) {
                   field.set(null, slot_field);
-                  success_count += 1;
+                  successCount += 1;
                 }
                 slotMap.remove(name);
               }
             }
           }
-          success_count += 1;
+          successCount += 1;
           if (hook != null) {
             if (hook == backup)
               log("Hooked " + target + ": hookBackup=" + hook);
@@ -1931,12 +2021,12 @@ public final class Albatross {
               }
               if (!checkFail) {
                 field.set(null, slot_field);
-                success_count += 1;
+                successCount += 1;
               }
               slotMap.remove(name);
             }
           }
-          success_count += 1;
+          successCount += 1;
           log("Mirror " + target + ": backup=" + backup);
         }
       } catch (AlbatrossErr e) {
@@ -1960,10 +2050,493 @@ public final class Albatross {
       }
     }
     if (!dependencies.isEmpty()) {
-      success_count += hookDependency(dependencies);
+      successCount += hookDependency(dependencies);
     }
-    return success_count;
+    return successCount;
   }
+
+
+  private static int unhookClassInternal(Class<?> hooker, ClassLoader loader, Class<?> defaultClass) throws AlbatrossErr {
+    if (initStatus > STATUS_INIT_OK) {
+      return -2;
+    }
+    if (!isHooked(hooker)) {
+      return -1;
+    }
+    HashMap<Object, HookRecord> hookRecord = new HashMap<>();
+    List<BackupRecord> backupRecords = new ArrayList<>();
+    TargetClass targetClassAnno = hooker.getAnnotation(TargetClass.class);
+    boolean isMirror = true;
+    if (targetClassAnno != null) {
+      isMirror = targetClassAnno.image();
+    }
+    if (defaultClass == null) {
+      if (targetClassAnno != null) {
+        defaultClass = getTargetClassFromAnnotation(targetClassAnno, loader);
+        if (defaultClass == TargetClass.class)
+          defaultClass = null;
+        if (defaultClass != null) {
+          if (loader == null)
+            loader = defaultClass.getClassLoader();
+        } else if (targetClassAnno.required()) {
+          return 0;
+        }
+      }
+    } else {
+      if (loader == null) {
+        loader = defaultClass.getClassLoader();
+      }
+    }
+    if (defaultClass != null) {
+      if (defaultClass.isInterface())
+        return 0;
+      if (!(defaultClass.getClassLoader() instanceof BaseDexClassLoader)) {
+        addToVisit(defaultClass);
+      } else if (targetClassAnno == null) {
+        isMirror = hooker != defaultClass;
+        if (isMirror) {
+          Class<?> superclass = hooker.getSuperclass();
+          if (superclass != null && superclass != Object.class) {
+            if (defaultClass != null)
+              if (ReflectUtils.isInstanceOf(hooker, defaultClass))
+                isMirror = false;
+            if (isMirror) {
+              throw new MirrorExtendErr(hooker);
+            }
+          }
+        }
+      }
+    }
+    int successCount;
+    boolean fieldEnable = !containsFlags(FLAG_FIELD_INVALID);
+    if (fieldEnable)
+      successCount = unBackupHookerFieldNative(hooker);
+    else
+      successCount = 0;
+    Field[] fields = hooker.getDeclaredFields();
+    Set<Class<?>> dependencies = null;
+    Map<String, Object> slotMap = new HashMap<>();
+
+    if (defaultClass != null) {
+      for (Field field : fields) {
+        boolean isStatic = Modifier.isStatic(field.getModifiers());
+        if (!isStatic)
+          continue;
+        Class<?> type = field.getType();
+        if (type == Class.class) {
+          if (field.getName().equals("Class")) {
+            field.setAccessible(true);
+            try {
+              field.set(null, null);
+            } catch (IllegalAccessException e) {
+            }
+          }
+          continue;
+        }
+        FieldConfig fieldConfig = fieldClsMap.get(type);
+        if (fieldConfig != null) {
+          try {
+            field.setAccessible(true);
+            field.set(null, null);
+            successCount += 1;
+          } catch (Exception e) {
+            Albatross.log("Reflection", e);
+          }
+        }
+      }
+    }
+
+    boolean checkArgument = false;
+    String methodName;
+    MethodHookBackup hookBackup;
+    StaticMethodHook staticMethodHook;
+    MethodHook methodHook;
+    StaticMethodHookBackup staticMethodHookBackup;
+    ConstructorHook constructorHook;
+    ConstructorHookBackup constructorHookBackup;
+    MethodBackup methodBackup;
+    StaticMethodBackup staticMethodBackup;
+    ConstructorBackup constructorBackup;
+    boolean needBackup = false;
+    String[] aliases = null;
+    int sdk = Build.VERSION.SDK_INT;
+    boolean methodRequired;
+    byte methodOption;
+    byte callWay = CURRENT;
+    int targetExec = DO_NOTHING;
+    int hookerExec = DO_NOTHING;
+    for (Method m : hooker.getDeclaredMethods()) {
+      Annotation[] annotations = m.getAnnotations();
+      if (annotations.length == 0) {
+        continue;
+      }
+      byte minSdk;
+      byte maxSdk;
+      boolean targetStatic;
+      Class<?> targetClass;
+      String[] className;
+      String[] classNameArgs;
+      HookAction hookWay;
+      ByName methodMarkAlias;
+      if ((hookBackup = m.getAnnotation(MethodHookBackup.class)) != null) {
+        targetStatic = hookBackup.isStatic();
+        className = hookBackup.className();
+        classNameArgs = hookBackup.value();
+        needBackup = true;
+        targetClass = hookBackup.targetClass();
+        aliases = hookBackup.name();
+        hookWay = HookAction.HOOK_METHOD;
+        methodRequired = hookBackup.required();
+        methodOption = hookBackup.option();
+        minSdk = hookBackup.minSdk();
+        maxSdk = hookBackup.maxSdk();
+        callWay = hookBackup.callWay();
+      } else if ((methodHook = m.getAnnotation(MethodHook.class)) != null) {
+        targetStatic = methodHook.isStatic();
+        targetClass = methodHook.targetClass();
+        classNameArgs = methodHook.value();
+        if ((methodBackup = m.getAnnotation(MethodBackup.class)) != null) {
+          needBackup = true;
+          callWay = methodBackup.callWay();
+        } else
+          needBackup = false;
+        aliases = methodHook.name();
+        className = methodHook.className();
+        hookWay = HookAction.HOOK_METHOD;
+        methodRequired = methodHook.required();
+        methodOption = methodHook.option();
+        minSdk = methodHook.minSdk();
+        maxSdk = methodHook.maxSdk();
+      } else if ((staticMethodHook = m.getAnnotation(StaticMethodHook.class)) != null) {
+        targetStatic = true;
+        targetClass = staticMethodHook.targetClass();
+        classNameArgs = staticMethodHook.value();
+        if ((staticMethodBackup = m.getAnnotation(StaticMethodBackup.class)) != null) {
+          needBackup = true;
+          callWay = staticMethodBackup.callWay();
+        } else
+          needBackup = false;
+        className = staticMethodHook.className();
+        aliases = staticMethodHook.name();
+        hookWay = HookAction.HOOK_METHOD;
+        methodRequired = staticMethodHook.required();
+        methodOption = staticMethodHook.option();
+        minSdk = staticMethodHook.minSdk();
+        maxSdk = staticMethodHook.maxSdk();
+      } else if ((staticMethodHookBackup = m.getAnnotation(StaticMethodHookBackup.class)) != null) {
+        targetStatic = true;
+        targetClass = staticMethodHookBackup.targetClass();
+        classNameArgs = staticMethodHookBackup.value();
+        needBackup = true;
+        aliases = staticMethodHookBackup.name();
+        hookWay = HookAction.HOOK_METHOD;
+        className = staticMethodHookBackup.className();
+        methodRequired = staticMethodHookBackup.required();
+        methodOption = staticMethodHookBackup.option();
+        minSdk = staticMethodHookBackup.minSdk();
+        maxSdk = staticMethodHookBackup.maxSdk();
+        callWay = staticMethodHookBackup.callWay();
+      } else if ((constructorHook = m.getAnnotation(ConstructorHook.class)) != null) {
+        hookWay = HookAction.HOOK_CONSTRUCTOR;
+        targetStatic = false;
+        targetClass = constructorHook.targetClass();
+        classNameArgs = constructorHook.value();
+        if ((constructorBackup = m.getAnnotation(ConstructorBackup.class)) != null) {
+          needBackup = true;
+          callWay = constructorBackup.callWay();
+        } else
+          needBackup = false;
+        className = constructorHook.className();
+        methodRequired = constructorHook.required();
+        methodOption = constructorHook.option();
+        minSdk = constructorHook.minSdk();
+        maxSdk = constructorHook.maxSdk();
+      } else if ((constructorHookBackup = m.getAnnotation(ConstructorHookBackup.class)) != null) {
+        hookWay = HookAction.HOOK_CONSTRUCTOR;
+        targetClass = constructorHookBackup.targetClass();
+        classNameArgs = constructorHookBackup.value();
+        className = constructorHookBackup.className();
+        needBackup = true;
+        targetStatic = false;
+        methodRequired = constructorHookBackup.required();
+        methodOption = constructorHookBackup.option();
+        minSdk = constructorHookBackup.minSdk();
+        maxSdk = constructorHookBackup.maxSdk();
+        callWay = constructorHookBackup.callWay();
+      } else if ((methodBackup = m.getAnnotation(MethodBackup.class)) != null) {
+        targetStatic = methodBackup.isStatic();
+        targetClass = methodBackup.targetClass();
+        className = methodBackup.className();
+        classNameArgs = methodBackup.value();
+        hookWay = HookAction.BACKUP_METHOD;
+        aliases = methodBackup.name();
+        methodRequired = methodBackup.required();
+        methodOption = methodBackup.option();
+        minSdk = methodBackup.minSdk();
+        maxSdk = methodBackup.maxSdk();
+        callWay = methodBackup.callWay();
+      } else if ((staticMethodBackup = m.getAnnotation(StaticMethodBackup.class)) != null) {
+        targetStatic = true;
+        targetClass = staticMethodBackup.targetClass();
+        className = staticMethodBackup.className();
+        classNameArgs = staticMethodBackup.value();
+        aliases = staticMethodBackup.name();
+        hookWay = HookAction.BACKUP_METHOD;
+        methodRequired = staticMethodBackup.required();
+        methodOption = staticMethodBackup.option();
+        minSdk = staticMethodBackup.minSdk();
+        maxSdk = staticMethodBackup.maxSdk();
+        callWay = staticMethodBackup.callWay();
+      } else if ((constructorBackup = m.getAnnotation(ConstructorBackup.class)) != null) {
+        targetClass = constructorBackup.targetClass();
+        classNameArgs = constructorBackup.value();
+        className = constructorBackup.className();
+        hookWay = HookAction.BACKUP_CONSTRUCTOR;
+        targetStatic = false;
+        methodRequired = constructorBackup.required();
+        methodOption = constructorBackup.option();
+        minSdk = constructorBackup.minSdk();
+        maxSdk = constructorBackup.maxSdk();
+        callWay = constructorBackup.callWay();
+      } else {
+        if (!Modifier.isStatic(m.getModifiers()))
+          if (isMirror)
+            throw new RedundantMethodErr(m);
+        continue;
+      }
+      if (minSdk != 0) {
+        if (sdk < minSdk)
+          continue;
+      }
+      if (maxSdk != 0) {
+        if (sdk > maxSdk)
+          continue;
+      }
+      Class<?>[] mParameterTypes = m.getParameterTypes();
+      Annotation[][] parameterAnnotations = m.getParameterAnnotations();
+      boolean isHookStatic = Modifier.isStatic(m.getModifiers());
+      if (targetClass == TargetClass.class) {
+        try {
+          targetClass = getTargetClass(defaultClass, className, targetStatic ? null : (isHookStatic ? mParameterTypes[0] : null), loader);
+        } catch (ClassNotFoundException e) {
+          continue;
+        }
+      }
+      Class<?>[] argTypes;
+      Method targetMethod = null;
+      Constructor<?> targetConstructor = null;
+      if (hookWay.v <= HookAction.BACKUP_METHOD.v && (methodMarkAlias = m.getAnnotation(ByName.class)) != null) {
+        argTypes = null;
+        try {
+          if ((methodOption & DefOption.VIRTUAL) == 0)
+            targetMethod = ReflectUtils.findDeclaredMethodByName(targetClass, methodMarkAlias.value(), methodMarkAlias.onlyAnno());
+          else
+            targetMethod = ReflectUtils.findMethodByName(targetClass, methodMarkAlias.value(), methodMarkAlias.onlyAnno());
+          checkArgument = true;
+        } catch (NoSuchMethodException ignore) {
+        }
+      } else {
+        try {
+          if (classNameArgs.length > 0) {
+            argTypes = getArgumentTypesFromString(classNameArgs, loader, false);
+            checkArgument = true;
+          } else {
+            checkArgument = false;
+            argTypes = getArgumentTypes(dependencies, parameterAnnotations, targetClass, mParameterTypes, loader, targetStatic, isHookStatic);
+          }
+        } catch (ClassNotFoundException e) {
+          if (methodRequired) {
+            throw new RequiredMethodErr("required method argument class is not find:" + e.getMessage(), annotations[0]);
+          }
+          continue;
+        } catch (FindMethodException e) {
+          CheckParameterTypesResult subArgTypes = e.subArgTypes;
+          if (!isMirror)
+            subArgTypes.excludeMethod = m;
+          if (hookWay.v <= HookAction.BACKUP_METHOD.v) {
+            String name;
+            if (hookWay == HookAction.HOOK_METHOD)
+              name = getSplitValue(HOOK_SUFFIX, m.getName());
+            else
+              name = getSplitValue(BACKUP_SUFFIX, m.getName());
+            if ((methodOption & DefOption.VIRTUAL) == 0) {
+              targetMethod = ReflectUtils.findDeclaredMethodWithType(targetClass, name, e.argTypes, subArgTypes);
+              if (targetMethod == null) {
+                for (String alias : aliases) {
+                  targetMethod = ReflectUtils.findDeclaredMethodWithType(targetClass, alias, e.argTypes, subArgTypes);
+                  if (targetMethod != null)
+                    break;
+                }
+              }
+            } else {
+              targetMethod = ReflectUtils.findMethodWithType(targetClass, name, e.argTypes, subArgTypes);
+              if (targetMethod == null) {
+                for (String alias : aliases) {
+                  targetMethod = ReflectUtils.findMethodWithType(targetClass, alias, e.argTypes, subArgTypes);
+                  if (targetMethod != null)
+                    break;
+                }
+              }
+            }
+            if (targetMethod == null) {
+              continue;
+            }
+          } else {
+            targetConstructor = ReflectUtils.findDeclaredConstructorWithType(targetClass, e.argTypes, subArgTypes);
+            if (targetConstructor == null) {
+              continue;
+            }
+          }
+          argTypes = e.argTypes;
+        }
+      }
+      switch (hookWay) {
+        case HOOK_METHOD:
+        case BACKUP_METHOD: {
+          if (targetMethod == null) {
+            try {
+              if (hookWay == HookAction.HOOK_METHOD)
+                methodName = getSplitValue(HOOK_SUFFIX, m.getName());
+              else
+                methodName = getSplitValue(BACKUP_SUFFIX, m.getName());
+              if ((methodOption & DefOption.VIRTUAL) == 0)
+                targetMethod = targetClass.getDeclaredMethod(methodName, argTypes);
+              else
+                targetMethod = ReflectUtils.findMethod(targetClass, methodName, argTypes);
+            } catch (Exception e) {
+              for (String alias : aliases) {
+                try {
+                  if ((methodOption & DefOption.VIRTUAL) == 0)
+                    targetMethod = targetClass.getDeclaredMethod(alias, argTypes);
+                  else
+                    targetMethod = ReflectUtils.findMethod(targetClass, alias, argTypes);
+                  break;
+                } catch (Exception ignore) {
+                }
+              }
+            }
+          }
+          if (targetMethod != null) {
+            try {
+              checkMethodReturn(dependencies, targetMethod, m);
+              if ((methodOption & DefOption.NOTHING) == 0) {
+                if (hookWay == HookAction.HOOK_METHOD)
+                  putHook(hookRecord, targetMethod, m, needBackup, targetExec, hookerExec).checkMethSign = checkArgument;
+                else if (callWay == CURRENT)
+                  putBackup(hookRecord, targetMethod, m, targetExec).checkMethSign = checkArgument;
+                else {
+                  putMirrorBackup(backupRecords, targetMethod, m, targetExec, callWay).checkMethSign = checkArgument;
+                }
+              }
+            } catch (AlbatrossErr e) {
+              throw e;
+            } catch (Exception e) {
+              log("Wrong target method for " + m, e);
+              if (methodRequired) {
+                throw new RequiredMethodErr("Wrong target method for " + m, annotations[0]);
+              }
+            }
+          } else {
+            log("Cannot find target method for " + m);
+            if (methodRequired) {
+              throw new RequiredMethodErr("Cannot find target method for " + m, annotations[0]);
+            }
+          }
+          break;
+        }
+        case HOOK_CONSTRUCTOR:
+        case BACKUP_CONSTRUCTOR: {
+          if (targetConstructor == null) {
+            try {
+              targetConstructor = targetClass.getDeclaredConstructor(argTypes);
+            } catch (NoSuchMethodException e) {
+            }
+          }
+          if (targetConstructor != null) {
+            try {
+              checkMethodReturn(dependencies, targetConstructor, m);
+              if ((methodOption & DefOption.NOTHING) == 0) {
+                if (hookWay == HookAction.HOOK_CONSTRUCTOR)
+                  putHook(hookRecord, targetConstructor, m, needBackup, targetExec, hookerExec).checkMethSign = checkArgument;
+                else if (callWay == CURRENT)
+                  putBackup(hookRecord, targetConstructor, m, targetExec).checkMethSign = checkArgument;
+                else {
+                  putMirrorBackup(backupRecords, targetMethod, m, targetExec, callWay).checkMethSign = checkArgument;
+                }
+              }
+            } catch (AlbatrossErr e) {
+              throw e;
+            } catch (Exception e) {
+            }
+          }
+          break;
+        }
+      }
+    }
+    String[] methodNames = new String[2];
+    Collection<HookRecord> hookRecords = hookRecord.values();
+    for (HookRecord hookMethod : hookRecords) {
+      Method hook = hookMethod.hook;
+      Method backup = hookMethod.backup;
+      Member target = hookMethod.target;
+      try {
+        boolean result;
+        if (hook != null) {
+          result = Albatross.unhookNative(target, hook, backup) == 0;
+        } else {
+          result = Albatross.unBackupNative(backup, CURRENT) == 0;
+        }
+        if (result) {
+          if (!slotMap.isEmpty()) {
+            if (hook != null)
+              methodNames[0] = hook.getName();
+            if (backup != null)
+              methodNames[1] = backup.getName();
+            for (String name : methodNames) {
+              if (name == null)
+                continue;
+              if (slotMap.containsKey(name)) {
+                Object[] v = (Object[]) slotMap.get(name);
+                Field field = (Field) v[0];
+                field.set(null, null);
+                successCount += 1;
+                slotMap.remove(name);
+              }
+            }
+          }
+          successCount += 1;
+        }
+      } catch (Throwable t) {
+        log("Failed to hook " + target + ": hook=" + hook + (backup == null ? "" : ", backup=" + backup), t);
+      }
+    }
+    for (BackupRecord backupRecord : backupRecords) {
+      Method backup = backupRecord.backup;
+      Member target = backupRecord.target;
+      try {
+        boolean result;
+        result = Albatross.unBackupNative(backup, backupRecord.backupWay) == 0;
+        if (result) {
+          if (!slotMap.isEmpty()) {
+            String name = backup.getName();
+            if (slotMap.containsKey(name)) {
+              Object[] v = (Object[]) slotMap.get(name);
+              Field field = (Field) v[0];
+              field.set(null, null);
+              successCount += 1;
+              slotMap.remove(name);
+            }
+          }
+          successCount += 1;
+          log("Mirror " + target + ": backup=" + backup);
+        }
+      } catch (Throwable t) {
+        log("Failed to mirror " + target + ": backup=" + backup, t);
+      }
+    }
+    return successCount;
+  }
+
 
   private static Map<Class<? extends ReflectionBase>, FieldConfig> fieldClsMap;
   private static Map<Class<?>, Class<?>> primBoxMap;
@@ -2029,6 +2602,7 @@ public final class Albatross {
       putFieldClass(MethodDef.class, true, null);
       putFieldClass(StaticMethodDef.class, true, null);
       putFieldClass(VoidMethodDef.class, true, void.class);
+      putFieldClass(BooleanMethodDef.class, true, boolean.class);
       putFieldClass(StaticVoidMethodDef.class, true, void.class);
     } catch (Exception e) {
       Albatross.log("initField", e);
@@ -2115,6 +2689,8 @@ public final class Albatross {
   }
 
   private static native boolean markHooked(Class<?> clz);
+
+  private static native boolean markUnhooked(Class<?> clz);
 
   public static native boolean isHooked(Class<?> clz);
 
