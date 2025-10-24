@@ -1,3 +1,6 @@
+version 2.2.0
+ - Unhook support.
+
 version 2.1.0
  - Support inheriting from the parent class or interface of the hooked class
  - Anti detection enhanced
@@ -7,7 +10,7 @@ version 2.0.2
  - Add some very practical methods.
 
 version 2.0.1
- - rpc server Optimization.
+ - Rpc server Optimization.
 
 version 2.0.0
  - Supports method hook call chains, allowing one method to be hooked by multiple methods.
