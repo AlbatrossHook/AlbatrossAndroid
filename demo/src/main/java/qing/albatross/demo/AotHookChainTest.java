@@ -2,11 +2,15 @@ package qing.albatross.demo;
 
 import android.app.Activity;
 
+import java.lang.reflect.Method;
+
 import qing.albatross.annotation.ExecOption;
+import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.MethodHookBackup;
 import qing.albatross.annotation.TargetClass;
 import qing.albatross.core.Albatross;
 import qing.albatross.exception.AlbatrossErr;
+import qing.albatross.reflection.VoidMethodDef;
 
 public class AotHookChainTest {
 
@@ -15,6 +19,11 @@ public class AotHookChainTest {
   @TargetClass(targetExec = ExecOption.AOT)
   private static class A0 {
 
+    @FieldRef
+    boolean mResumed;
+
+    @FieldRef
+    static int RESULT_OK;
 
     @MethodHookBackup
     private void onResume() {
@@ -25,6 +34,8 @@ public class AotHookChainTest {
       Albatross.log("A0.onResume end");
       assert callSeq == 6;
     }
+
+    static VoidMethodDef onResume;
 
   }
 
@@ -108,26 +119,42 @@ public class AotHookChainTest {
         super.onResume();
       } catch (Exception ignore) {
       }
-//      assert callSeq == 6;
       Albatross.log("finish Activity.onResume");
     }
   }
 
 
-  static void test() {
-    try {
-      Albatross.hookClass(A0.class, Activity.class);
-      Albatross.hookClass(A3.class, Activity.class);
-      Albatross.hookClass(A1.class, Activity.class);
-      Albatross.hookClass(A4.class, Activity.class);
-      Albatross.hookClass(A2.class, Activity.class);
-      Albatross.hookClass(A5.class, Activity.class);
-    } catch (AlbatrossErr e) {
-      throw new RuntimeException(e);
-    }
+  static void test() throws AlbatrossErr {
+    int a0 = Albatross.hookClass(A0.class, Activity.class);
+    int a3 = Albatross.hookClass(A3.class, Activity.class);
+    int a1 = Albatross.hookClass(A1.class, Activity.class);
+    int a4 = Albatross.hookClass(A4.class, Activity.class);
+    int a2 = Albatross.hookClass(A2.class, Activity.class);
+    int a5 = Albatross.hookClass(A5.class, Activity.class);
+    callSeq = 0;
+    Method method = A0.onResume.method;
+    if (Albatross.isFieldEnable())
+      assert A0.RESULT_OK == Activity.RESULT_OK;
+    int hookCount = Albatross.getMethodHookCount(method);
+    assert hookCount >= 6;
+    new FakeActivity().onResume();
+    assert callSeq == 6;
+    int a00 = Albatross.unhookClass(A0.class, Activity.class);
+    assert a00 <= a0;
+    int a33 = Albatross.unhookClass(A3.class, Activity.class);
+    assert a33 == a3;
+    int a11 = Albatross.unhookClass(A1.class, Activity.class);
+    assert a11 == a1;
+    int a44 = Albatross.unhookClass(A4.class, Activity.class);
+    assert a44 == a4;
+    int a22 = Albatross.unhookClass(A2.class, Activity.class);
+    assert a22 == a2;
+    int a55 = Albatross.unhookClass(A5.class, Activity.class);
+    assert a55 == a5;
+    assert Albatross.getMethodHookCount(method) + 6 == hookCount;
     callSeq = 0;
     new FakeActivity().onResume();
-
+    assert callSeq == 0;
   }
 
 }
