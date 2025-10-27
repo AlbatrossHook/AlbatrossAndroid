@@ -139,6 +139,9 @@ public class TestMain {
       System.out.println("debugger isDebuggerConnected");
     }
     Albatross.loadLibrary(null);
+    SearchCallerTest.test();
+    SafeToStringTest.test();
+    SearchObjectTest.test();
     UnHookTest2.test();
     UnHookTest.test();
 //    ExtendImplTest.test();
