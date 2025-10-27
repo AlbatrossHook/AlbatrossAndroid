@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,14 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
-package qing.albatross.core;
+package qing.albatross.classloader;
 
 import qing.albatross.annotation.ConstructorBackup;
 import qing.albatross.annotation.ConstructorHook;
-import qing.albatross.annotation.ConstructorHookBackup;
 import qing.albatross.annotation.TargetClass;
+import qing.albatross.core.Albatross;
 
 @TargetClass(ClassLoader.class)
 public class ClassLoaderHook {
@@ -40,30 +37,39 @@ public class ClassLoaderHook {
 
 
   @ConstructorBackup
+  static native void init$Backup(ClassLoader loader, Void unused, ClassLoader parent);
+
   @ConstructorHook
   static void init(ClassLoader loader, Void unused, ClassLoader parent) {
-    init(loader, unused, parent);
+    init$Backup(loader, unused, parent);
     Albatross.appendLoader(loader);
   }
 
   @ConstructorBackup
+  static native void init$Backup(ClassLoader loader, Void unused, String name, ClassLoader parent);
+
   @ConstructorHook
   static void init(ClassLoader loader, Void unused, String name, ClassLoader parent) {
-    init(loader, unused, name, parent);
+    init$Backup(loader, unused, name, parent);
     Albatross.appendLoader(loader);
   }
 
   @ConstructorBackup
+  static native void initM$Backup(ClassLoader loader, ClassLoader parent, boolean nullAllowed);
+
   @ConstructorHook
   static void initM(ClassLoader loader, ClassLoader parent, boolean nullAllowed) {
-    initM(loader, parent, nullAllowed);
+    initM$Backup(loader, parent, nullAllowed);
     Albatross.appendLoader(loader);
   }
 
   //aot code may inline other constructor,so hook this constructor also.
-  @ConstructorHookBackup
+  @ConstructorBackup
+  private static native void init$Backup(ClassLoader loader, ClassLoader parent);
+
+  @ConstructorHook
   private static void init(ClassLoader loader, ClassLoader parent) {
-    init(loader, parent);
+    init$Backup(loader, parent);
     Albatross.appendLoader(loader);
   }
 
