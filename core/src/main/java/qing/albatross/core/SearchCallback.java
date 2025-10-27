@@ -15,10 +15,8 @@
  */
 package qing.albatross.core;
 
-import java.lang.reflect.Member;
 
-public  interface InstructionCallback {
+public interface SearchCallback<T> {
 
-   void onEnter(Member method, Object self, int dexPc,InvocationContext invocationContext) ;
-
+  boolean match(T o,int index);
 }

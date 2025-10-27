@@ -15,10 +15,23 @@
  */
 package qing.albatross.core;
 
-import java.lang.reflect.Member;
+import qing.albatross.annotation.TargetClass;
+import qing.albatross.classloader.DexCacheH;
+import qing.albatross.reflection.FieldDef;
+import qing.albatross.reflection.IntFieldDef;
 
-public  interface InstructionCallback {
+@TargetClass(Class.class)
+public class ClassH {
 
-   void onEnter(Member method, Object self, int dexPc,InvocationContext invocationContext) ;
+  static IntFieldDef objectSize;
 
+  static IntFieldDef classSize;
+
+  static IntFieldDef dexTypeIndex;
+
+  static IntFieldDef dexClassDefIndex;
+
+//  @FieldRef(option = DefOption.INSTANCE)
+//  DexCacheH dexCache;
+  static FieldDef<DexCacheH> dexCache;
 }

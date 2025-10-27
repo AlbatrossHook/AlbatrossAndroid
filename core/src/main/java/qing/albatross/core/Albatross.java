@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -48,6 +49,7 @@ import java.util.Map;
 import java.util.Set;
 
 import dalvik.system.BaseDexClassLoader;
+import dalvik.system.DexFile;
 import qing.albatross.annotation.Alias;
 import qing.albatross.annotation.ArgumentTypeSlot;
 import qing.albatross.annotation.ByName;
@@ -55,7 +57,9 @@ import qing.albatross.annotation.ConstructorBackup;
 import qing.albatross.annotation.ConstructorHook;
 import qing.albatross.annotation.ConstructorHookBackup;
 import qing.albatross.annotation.DefOption;
+import qing.albatross.annotation.ExecOption;
 import qing.albatross.annotation.FieldRef;
+
 import qing.albatross.annotation.MethodBackup;
 import qing.albatross.annotation.MethodHook;
 import qing.albatross.annotation.MethodHookBackup;
@@ -66,7 +70,12 @@ import qing.albatross.annotation.StaticMethodHook;
 import qing.albatross.annotation.StaticMethodHookBackup;
 import qing.albatross.annotation.FuzzyMatch;
 import qing.albatross.annotation.TargetClass;
+import qing.albatross.classloader.BaseDexClassLoaderH;
+import qing.albatross.classloader.ClassLoaderHook;
+import qing.albatross.classloader.DexCacheH;
+import qing.albatross.classloader.Element;
 import qing.albatross.common.HookResult;
+import qing.albatross.common.SafeToString;
 import qing.albatross.exception.AlbatrossErr;
 import qing.albatross.exception.AlbatrossException;
 import qing.albatross.exception.CheckParameterTypesResult;
@@ -399,6 +408,15 @@ public final class Albatross {
       checkCompatibleMethods(null, target, hook, "Hook");
     int result = backupAndHookNative(target, hook, backup, targetExecMode, hookerExecMode);
     if (result == HookResult.HOOK_SUCCESS) {
+      if (inline_max_code_units > 0) {
+        int methodCodeSize = getMethodCodeSize(target);
+        if (methodCodeSize < inline_max_code_units && (target.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader)) {
+          searchMethodCaller(target, (m, i) -> {
+            toDecompileMethod.add(m);
+            return true;
+          });
+        }
+      }
       return true;
     }
     if (result == HookResult.HOOK_FAIL) {
@@ -502,6 +520,8 @@ public final class Albatross {
 
   public static native int getMethodHookCount(Member target);
 
+  public static native int getMethodCodeSize(Member target);
+
 
   public static InstructionListener hookInstruction(Member member, int dexPc, InstructionCallback callback) {
     return hookInstruction(member, dexPc, dexPc, callback, DO_NOTHING);
@@ -564,7 +584,7 @@ public final class Albatross {
 
   private synchronized static native boolean isHookerAssignableNative(Class<?> hooker, Class<?> targetClass);
 
-  public synchronized static native int decompileMethod(Method method, boolean disableJit);
+  public synchronized static native int decompileMethod(Member method, boolean disableJit);
 
   private static native int compileMethodNative(Member method, int execMode);
 
@@ -605,7 +625,7 @@ public final class Albatross {
   }
 
   public static boolean setMethodExecMode(Member method, int execMode) {
-    if (containsFlags(FLAG_NO_COMPILE))
+    if (containsFlags(FLAG_NO_COMPILE) && execMode != DISABLE_AOT)
       return false;
     int compileResult = compileMethodNative(method, execMode);
     if (compileResult == 0)
@@ -763,6 +783,17 @@ public final class Albatross {
 
   private static int initResult;
 
+  private static int inline_max_code_units = 0;
+  private static Set<Member> toDecompileMethod;
+
+
+  public static void setInlineMaxCodeUnits(int n) {
+    inline_max_code_units = n;
+    if (n > 0 && toDecompileMethod == null) {
+      toDecompileMethod = new HashSet<>();
+    }
+  }
+
   private static final Map<ClassLoader, List<Class<?>>> hookers = new HashMap<>();
 
   @SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
@@ -779,6 +810,7 @@ public final class Albatross {
       initResult = initMethodNative(initNativeMethod, Albatross.class.getDeclaredMethod("initFieldOffsetNative", Field.class, Field.class, int.class, Class.class),
           flags, Albatross.class);
       if (InitResultFlag.INIT_OK.isSet(initResult)) {
+        registerToStringMethod(SafeToString.class, SafeToString.class.getDeclaredMethod("safeToString", Object.class));
         initStatus |= STATUS_INIT_OK;
         initStatus &= ~(STATUS_INIT_FAIL | STATUS_NOT_INIT);
         if ((flags & FLAG_INIT_CLASS) != 0) {
@@ -794,12 +826,19 @@ public final class Albatross {
               + ":" + Albatross.class.getDeclaredMethod("ensureClassInitialized", Class.class).getAnnotation(Alias.class));
           initStatus |= STATUS_INIT_FAIL;
           return false;
-        } else {
-//          Albatross.log("get hooker method success:" + $Image.ensureClassInitialized);
         }
         hookClassInternal(InstructionListenerH.class, Albatross.class.getClassLoader(), InstructionListener.class, null);
         transactionBegin(false);
         try {
+          hookClassInternal(ClassH.class, Class.class.getClassLoader(), Class.class, Albatross.class);
+          Class<?> targetClass = Albatross.class;
+          int r = measureClassLayout(targetClass, ClassH.dexClassDefIndex.get(targetClass), ClassH.dexTypeIndex.get(targetClass), ClassH.classSize.get(targetClass), ClassH.objectSize.get(targetClass));
+          if (r == 0) {
+            unhookClassInternal(ClassH.class, Class.class.getClassLoader(), Class.class);
+            log("measure class layout fail");
+          } else {
+            hookClassInternal(BaseDexClassLoaderH.class, BaseDexClassLoader.class.getClassLoader(), BaseDexClassLoader.class, null);
+          }
           Method ensureClassInitialized = $Image.ensureClassInitialized.method;
           if (InitResultFlag.REPLACE_ENSURE_CLASS_INIT.isSet(initResult)) {
             Method ensureClassInitializedVisibly = $Image.ensureClassInitializedForVisibly.method;
@@ -808,7 +847,8 @@ public final class Albatross {
           }
           ensureClassInitialized(MethodStubs.class);
           registerMethodNative(ensureClassInitialized, $Image.onClassInit.method,
-              $Image.appendLoader.method, $Image.checkMethodReturn.method, InstructionListenerH.onEnter.method, MethodStubs.class);
+              $Image.appendLoader.method, $Image.checkMethodReturn.method, InstructionListenerH.onEnter.method,
+              MethodStubs.class, SearchCallback.class.getDeclaredMethod("match", Object.class, int.class));
           int sdkInt = Build.VERSION.SDK_INT;
           if (sdkInt > 28 && sdkInt < 35) {
             Class<?> Reflection = Class.forName("sun.reflect.Reflection");
@@ -872,6 +912,8 @@ public final class Albatross {
             MethodCallHook.Image.callShort.method, MethodCallHook.Image.callInt.method, MethodCallHook.Image.callFloat.method, MethodCallHook.Image.callLong.method,
             MethodCallHook.Image.callDouble.method, MethodCallHook.Image.callObject.method});
         measureLayoutNative(Albatross.class.getDeclaredMethod("insLayoutMeasure", int.class, int.class, int.class));
+        compileClass(SafeToString.class, AOT | JIT_OPTIMIZED);
+        compileClassByAnnotation(Albatross.class, DO_NOTHING);
         return true;
       } else {
         initStatus |= STATUS_INIT_FAIL | FLAG_FIELD_BACKUP_BAN;
@@ -1103,7 +1145,7 @@ public final class Albatross {
   }
 
   public static void unloadDex(ClassLoader dexClassLoader) {
-    List<Class<?>> dexHookers = null;
+    List<Class<?>> dexHookers;
     synchronized (hookers) {
       dexHookers = hookers.remove(dexClassLoader);
     }
@@ -1474,6 +1516,7 @@ public final class Albatross {
           field.setAccessible(true);
           try {
             field.set(null, defaultClass);
+            successCount += 1;
           } catch (IllegalAccessException e) {
             log("fail set class value:" + field, e);
           }
@@ -1496,6 +1539,18 @@ public final class Albatross {
               }
             } else {
               expectClass = ReflectionBase.getFieldGenericType(field);
+              if (instance != null) {
+                TargetClass fieldTarget = expectClass.getAnnotation(TargetClass.class);
+                if (fieldTarget != null) {
+                  Class<?> t = getTargetClassFromAnnotation(fieldTarget, loader);
+                  if (t == null || t == TargetClass.class) {
+                    targetField.setAccessible(true);
+                    Object fieldValue = targetField.get(instance);
+                    if (fieldValue != null)
+                      targetFieldType = fieldValue.getClass();
+                  }
+                }
+              }
               if (expectClass != null) {
                 if (!expectClass.isAssignableFrom(targetFieldType)) {
                   if (!checkTargetClass(dependencies, expectClass, targetFieldType)) {
@@ -2128,6 +2183,7 @@ public final class Albatross {
             field.setAccessible(true);
             try {
               field.set(null, null);
+              successCount += 1;
             } catch (IllegalAccessException e) {
             }
           }
@@ -2726,6 +2782,12 @@ public final class Albatross {
     int ret;
     if ((ret = transactionEndNative(doTask, suspendVM)) == 0) {
       toVisitedClass.clear();
+      if (toDecompileMethod != null && !toDecompileMethod.isEmpty()) {
+        for (Member method : toDecompileMethod) {
+          decompileMethod(method, false);
+        }
+        toDecompileMethod.clear();
+      }
     }
     return ret;
   }
@@ -2748,17 +2810,114 @@ public final class Albatross {
 
   //---------------------------------
 
-  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter, Class<?> stubClass);
+  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter, Class<?> stubClass, Method searchCallback);
+
+  private static native void registerToStringMethod(Class<?> clz, Method toString);
 
   private static native void registerHookCallback(Method[] methods/*Method callVoid, Method callBool, Method callChar, Method callByte, Method callShort, Method callInt, Method callFloat,
                                                   Method callLong, Method callDouble, Method callObject*/);
 
+  private static native int searchObjectNative(Class<?> clz, Object callback);
+
+  private static native int searchMethodCallerNative(Class<?> clz, Member callee, Object callback, boolean check);
+
+  private static native boolean isDexFileRefClassNative(Class<?> clz, long dexFile);
+
+
+  @RunMode(DISABLE_AOT)
+  public static boolean classDexFileRefClass(Class<?> clz, Class<?> toRef) {
+    DexCacheH dexCache = ClassH.dexCache.get(clz);
+    long dexFile = dexCache.dexFile;
+    return isDexFileRefClassNative(toRef, dexFile);
+  }
+
+
+  public static int searchMethodCaller(Member method, ClassLoader classLoader, SearchCallback<Member> callback) {
+    return searchMethodCaller(method, classLoader, new MethodSearchCallback(callback));
+  }
+
+  public static int searchMethodCaller(Class<?> clz, Member callee, SearchCallback<Member> callback) {
+    return searchMethodCallerNative(clz, callee, callback, true);
+  }
+
+
+  @RunMode(DISABLE_AOT)
+  private static int searchMethodCaller(Member method, ClassLoader classLoader, MethodSearchCallback callbackDelegate) {
+    if (!(classLoader instanceof BaseDexClassLoader))
+      return callbackDelegate.count;
+    BaseDexClassLoaderH loader = convert(classLoader, BaseDexClassLoaderH.class);
+    Element[] dexElements = loader.pathList.dexElements;
+    if (dexElements == null)
+      return callbackDelegate.count;
+    Map<Long, Boolean> dexRefTable = new HashMap<>();
+    Class<?> declaredClass = method.getDeclaringClass();
+    for (Element dexElement : dexElements) {
+      DexFile d = dexElement.dexFile;
+      if (d == null)
+        continue;
+      Enumeration<String> dexEntries = d.entries();
+      while (dexEntries.hasMoreElements()) {
+        String className = dexEntries.nextElement();
+        try {
+          Class<?> clz = Class.forName(className, false, classLoader);
+          DexCacheH dexCache = ClassH.dexCache.get(clz);
+          long dexFile = dexCache.dexFile;
+          Boolean isRef = dexRefTable.computeIfAbsent(dexFile, k -> isDexFileRefClassNative(declaredClass, dexFile));
+          if (!isRef) {
+            continue;
+          }
+          searchMethodCallerNative(clz, method, callbackDelegate, false);
+          if (!callbackDelegate.carryOn)
+            return callbackDelegate.count;
+        } catch (Throwable ignore) {
+        }
+      }
+    }
+    return callbackDelegate.count;
+  }
+
+
+  public static <T> int searchObject(Class<T> clz, SearchCallback<T> callback) {
+    return searchObjectNative(clz, callback);
+  }
+
+  public static int searchMethodCaller(Member method, SearchCallback<Member> callback) {
+    Class<?> declaringClass = method.getDeclaringClass();
+    ClassLoader defineLoader = declaringClass.getClassLoader();
+    MethodSearchCallback callbackDelegate = new MethodSearchCallback(callback);
+    searchMethodCaller(method, defineLoader, callbackDelegate);
+    if (!callbackDelegate.carryOn)
+      return callbackDelegate.count;
+    String clzName = declaringClass.getName();
+    try {
+      for (ClassLoader classLoader : classLoaderList) {
+        if (classLoader == defineLoader)
+          continue;
+        try {
+          Class<?> c = Class.forName(clzName, false, classLoader);
+          if (c == declaringClass) {
+            searchMethodCaller(method, classLoader, callbackDelegate);
+            if (!callbackDelegate.carryOn)
+              return callbackDelegate.count;
+          }
+        } catch (Exception ignore) {
+        }
+
+      }
+    } catch (Exception ignore) {
+    }
+    return callbackDelegate.count;
+  }
+
   private static native void measureLayoutNative(Method method);
+
+  private static native int measureClassLayout(Class<?> c, int dexClassDefIndex, int dexTypeIndex, int classSize, int objectSize);
+
 
   private static final List<ClassLoader> classLoaderList = new ArrayList<>();
 
   @Alias("appendLoader")
-  static boolean appendLoader(ClassLoader loader) {
+  public static boolean appendLoader(ClassLoader loader) {
     synchronized (classLoaderList) {
       if (classLoaderList.contains(loader))
         return false;

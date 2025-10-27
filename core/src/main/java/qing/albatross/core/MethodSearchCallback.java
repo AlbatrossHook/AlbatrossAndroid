@@ -17,8 +17,21 @@ package qing.albatross.core;
 
 import java.lang.reflect.Member;
 
-public  interface InstructionCallback {
+public class MethodSearchCallback implements SearchCallback<Member> {
 
-   void onEnter(Member method, Object self, int dexPc,InvocationContext invocationContext) ;
+  int count;
+  SearchCallback<Member> callback;
+  public boolean carryOn;
 
+  public MethodSearchCallback(SearchCallback<Member> callback) {
+    this.callback = callback;
+    count = 0;
+    carryOn = true;
+  }
+
+  @Override
+  public boolean match(Member o, int index) {
+    carryOn = callback.match(o, count++);
+    return carryOn;
+  }
 }
