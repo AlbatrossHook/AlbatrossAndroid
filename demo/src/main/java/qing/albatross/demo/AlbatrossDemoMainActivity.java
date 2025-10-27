@@ -280,12 +280,11 @@ public class AlbatrossDemoMainActivity extends Activity {
   InstructionListener onCreate = null;
 
   public void hookOnCreate(View view) throws NoSuchMethodException {
-    initAlbatross();
     if (onCreate == null) {
       Method getCaller = Activity.class.getDeclaredMethod("onCreate", Bundle.class);
-      onCreate = Albatross.hookInstruction(getCaller, 0, 100, (method, self, dexPc, invocationContext) -> {
+      onCreate = Albatross.hookInstruction(getCaller, 0, 200, (method, self, dexPc, invocationContext) -> {
         assert self.getClass().equals(SecondActivity.class);
-        Albatross.log("hookOnCreate onEnter:" + dexPc + " this:" + self);
+        Albatross.log("[" + dexPc + "] " + invocationContext.smaliString());
       });
     } else {
       onCreate.unHook();
@@ -293,7 +292,6 @@ public class AlbatrossDemoMainActivity extends Activity {
     }
     startActivity(new Intent(this, SecondActivity.class));
   }
-
 
   public void onResume() {
     textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis() + ",testing by continuously clicking the \"load\" button,一定要先注册初始化才能测试");
