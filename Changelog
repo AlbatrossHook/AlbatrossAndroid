@@ -1,3 +1,9 @@
+version 3.0.0
+- dump smail instruction will print out the relevant register contents
+- Support specifying classes to search for objects from the heap
+- Implement obtain all callers of the target method
+- Optimize for extremely short function hooks
+
 version 2.2.0
  - Unhook support.
 
