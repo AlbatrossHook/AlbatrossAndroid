@@ -912,6 +912,7 @@ public final class Albatross {
             MethodCallHook.Image.callShort.method, MethodCallHook.Image.callInt.method, MethodCallHook.Image.callFloat.method, MethodCallHook.Image.callLong.method,
             MethodCallHook.Image.callDouble.method, MethodCallHook.Image.callObject.method});
         measureLayoutNative(Albatross.class.getDeclaredMethod("insLayoutMeasure", int.class, int.class, int.class));
+        SafeToString.safeToString(null);
         compileClass(SafeToString.class, AOT | JIT_OPTIMIZED);
         compileClassByAnnotation(Albatross.class, DO_NOTHING);
         return true;
