@@ -13,10 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package qing.albatross.core;
+package qing.albatross.search;
 
 
-public interface SearchCallback<T> {
+import java.lang.reflect.Member;
 
-  boolean match(T o,int index);
+public interface FieldCallback {
+
+  int FIELD_GET = 1;
+  int FIELD_SET = 2;
+  int FIELD_ALL = FIELD_SET | FIELD_GET;
+
+  boolean match(Member method, int operation, int pos);
 }

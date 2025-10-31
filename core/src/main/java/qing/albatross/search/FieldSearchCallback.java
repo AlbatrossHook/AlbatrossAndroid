@@ -13,25 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package qing.albatross.core;
+package qing.albatross.search;
 
 import java.lang.reflect.Member;
 
-public class MethodSearchCallback implements SearchCallback<Member> {
+import qing.albatross.core.Albatross;
 
-  int count;
-  SearchCallback<Member> callback;
+public class FieldSearchCallback implements FieldCallback {
+
+  public int count;
+  public FieldCallback callback;
   public boolean carryOn;
 
-  public MethodSearchCallback(SearchCallback<Member> callback) {
+  public FieldSearchCallback(FieldCallback callback) {
     this.callback = callback;
     count = 0;
     carryOn = true;
   }
 
+
   @Override
-  public boolean match(Member o, int index) {
-    carryOn = callback.match(o, count++);
+  public boolean match(Member method, int operation, int pos) {
+    count++;
+    try {
+      carryOn = callback.match(method, operation, pos);
+    } catch (Exception e) {
+      Albatross.log("FieldSearchCallback err", e);
+      return false;
+    }
     return carryOn;
   }
 }
