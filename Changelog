@@ -1,8 +1,14 @@
+version 3.1.0
+ - Expand the search scope to support finding methods and field references from BootClass
+ - Optimize the speed of search
+ - Adding an interface implementation for traversing classes is very practical for traversing classes from bootclassLoader
+ - The callback index for field and method search is changed to dexpc, which can be used for hook instructions
+
 version 3.0.0
-- dump smail instruction will print out the relevant register contents
-- Support specifying classes to search for objects from the heap
-- Implement obtain all callers of the target method
-- Optimize for extremely short function hooks
+ - dump smail instruction will print out the relevant register contents
+ - Support specifying classes to search for objects from the heap
+ - Implement obtain all callers of the target method
+ - Optimize for extremely short function hooks
 
 version 2.2.0
  - Unhook support.
