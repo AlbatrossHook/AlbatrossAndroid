@@ -52,7 +52,7 @@ public class SearchCallerTest {
     count = Albatross.searchMethodCaller(TextView.class.getDeclaredMethod("setText", CharSequence.class), (m, i) -> {
       methods.add(m);
       return true;
-    });
+    }, true,true);
     assert count > 0;
   }
 

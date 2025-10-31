@@ -294,7 +294,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   }
 
   public void onResume() {
-    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis() + ",testing by continuously clicking the \"load\" button,一定要先注册初始化才能测试");
+    textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis() + ",testing by continuously clicking the \"load\" button,确保so库是最新的");
     super.onResume();
   }
 
