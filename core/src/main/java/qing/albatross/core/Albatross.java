@@ -415,7 +415,7 @@ public final class Albatross {
     if (result == HookResult.HOOK_SUCCESS) {
       if (inline_max_code_units > 0) {
         int methodCodeSize = getMethodCodeSize(target);
-        if (methodCodeSize < inline_max_code_units && (target.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader)) {
+        if (methodCodeSize != 0 && methodCodeSize <= inline_max_code_units && (target.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader)) {
           searchMethodCaller(target, (m, i) -> {
             toDecompileMethod.add(m);
             return true;
@@ -791,15 +791,12 @@ public final class Albatross {
 
   private static int initResult;
 
-  private static int inline_max_code_units = 0;
+  private static int inline_max_code_units = 10;
   private static Set<Member> toDecompileMethod;
 
 
   public static void setInlineMaxCodeUnits(int n) {
     inline_max_code_units = n;
-    if (n > 0 && toDecompileMethod == null) {
-      toDecompileMethod = new HashSet<>();
-    }
   }
 
   private static final Map<ClassLoader, List<Class<?>>> hookers = new HashMap<>();
@@ -915,6 +912,7 @@ public final class Albatross {
             disableLog();
           }
           pendingMap = new HashMap<>();
+          toDecompileMethod = new HashSet<>();
           initClassLoader();
           Albatross.hookClassInternal(MethodCallHook.Image.class, MethodCallHook.class.getClassLoader(), MethodCallHook.class, null);
           Albatross.hookClassInternal(ActivityThreadH.class, ActivityThread.getClassLoader(), ActivityThread, null);
@@ -2750,7 +2748,7 @@ public final class Albatross {
     int ret;
     if ((ret = transactionEndNative(doTask, suspendVM)) == 0) {
       toVisitedClass.clear();
-      if (toDecompileMethod != null && !toDecompileMethod.isEmpty()) {
+      if (!toDecompileMethod.isEmpty()) {
         for (Member method : toDecompileMethod) {
           decompileMethod(method, false);
         }
