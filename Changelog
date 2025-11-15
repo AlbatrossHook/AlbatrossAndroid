@@ -1,3 +1,10 @@
+version 3.2.0
+ - Rename the annotations related to the execution mode
+ - add triggerFieldName for more precise control over hook
+ - Optimize object-to-string conversion, add length limits
+ - The instance method 'this' may be empty. Optimize the acquisition of parameters and add exceptions to check if the' this' parameter exists
+ - arm and arm64 native hook optimization. The very short jit code of arm32 hook will not cause errors. arm64 supports shorter hook instructions and cannot locate the jumped so
+
 version 3.1.0
  - Expand the search scope to support finding methods and field references from BootClass
  - Optimize the speed of search
