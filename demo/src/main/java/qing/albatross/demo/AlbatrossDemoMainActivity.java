@@ -4,6 +4,7 @@ import static qing.albatross.demo.TestMain.testGc;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Debug;
@@ -17,7 +18,7 @@ import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-import qing.albatross.annotation.ExecOption;
+import qing.albatross.annotation.ExecutionOption;
 import qing.albatross.core.Albatross;
 import qing.albatross.core.InstructionListener;
 import qing.albatross.demo.android.HandlerHook;
@@ -31,6 +32,8 @@ public class AlbatrossDemoMainActivity extends Activity {
   static boolean isLoad = false;
   protected TextView textView;
 
+  public static final int ALBATROSS_NATIVE_VERSION = 1;
+
   public void fixLayout() {
     setContentView(R.layout.activity_albatross_demo_main);
     textView = findViewById(R.id.sample_text);
@@ -43,17 +46,27 @@ public class AlbatrossDemoMainActivity extends Activity {
     fixLayout();
   }
 
-  private static native boolean registerAlbatrossLib(Class<?> albatross);
+  private static native String registerAlbatrossLib(Class<?> albatross, int version);
 
   static int albatrossInitFlags = Albatross.FLAG_CALL_CHAIN;
 
-  static void initAlbatross() {
+  void initAlbatross() {
     if (isLoad)
       return;
     isLoad = true;
     try {
       System.loadLibrary("api");
-      registerAlbatrossLib(Albatross.class);
+      String res = registerAlbatrossLib(Albatross.class, ALBATROSS_NATIVE_VERSION);
+      if (res != null) {
+        new AlertDialog.Builder(this)
+            .setTitle("加载异常")
+            .setMessage(res)
+            .setPositiveButton("退出", (dialog, which) -> {
+              System.exit(0);
+            })
+            .show();
+        return;
+      }
       Albatross.init(albatrossInitFlags);
     } catch (Throwable e) {
       if (BuildConfig.DEBUG)
@@ -67,6 +80,7 @@ public class AlbatrossDemoMainActivity extends Activity {
     String processName = Albatross.currentProcessName();
     String profileFile = Albatross.getProfileFilePath();
     Albatross.log("[*] " + packageName + ":" + processName + ":" + profileFile);
+    assert (Albatross.currentApplication() == getApplication());
   }
 
   public void initByLoad(View view) {
@@ -79,7 +93,6 @@ public class AlbatrossDemoMainActivity extends Activity {
   public void load(View view) {
     if (!isLoad) {
       initAlbatross();
-      assert (Albatross.currentApplication() == getApplication());
       return;
     }
     if (!BuildConfig.DEBUG)
@@ -104,7 +117,7 @@ public class AlbatrossDemoMainActivity extends Activity {
     long isCompile = Albatross.entryPointFromQuickCompiledCode(
         AlbatrossDemoMainActivity.class.getDeclaredMethod(
             "crash", View.class));
-    int v = Albatross.compileClass(AlbatrossDemoMainActivity.class, ExecOption.JIT_OPTIMIZED);
+    int v = Albatross.compileClass(AlbatrossDemoMainActivity.class, ExecutionOption.JIT_OPTIMIZED);
     textView.setText(
         "compile:" + v + " isCompile:" + isCompile + " field:" + !Albatross.containsFlags(
             Albatross.FLAG_FIELD_INVALID
@@ -222,7 +235,7 @@ public class AlbatrossDemoMainActivity extends Activity {
 
   public void CompileO(View view) {
     initAlbatross();
-    Albatross.setExecConfiguration(ExecOption.JIT_OPTIMIZED, ExecOption.JIT_OPTIMIZED, ExecOption.RECOMPILE_OPTIMIZED);
+    Albatross.setExecConfiguration(ExecutionOption.JIT_OPTIMIZED, ExecutionOption.JIT_OPTIMIZED, ExecutionOption.RECOMPILE_OPTIMIZED);
   }
 
 

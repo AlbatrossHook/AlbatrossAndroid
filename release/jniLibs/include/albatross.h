@@ -14,6 +14,7 @@ typedef void (*enter_listener)(InvocationContext *invocationContext, void *data)
 typedef void (*leave_listener)(InvocationContext *invocationContext, void *data);
 int AlbatrossTransactionBegin();
 int AlbatrossTransactionEnd();
+int AlbatrossGetVersion();
 int AlbatrossHookFunc(void *address, void *replace_func, void **origin_func);
 int AlbatrossUnHook(void *address);
 typedef enum {

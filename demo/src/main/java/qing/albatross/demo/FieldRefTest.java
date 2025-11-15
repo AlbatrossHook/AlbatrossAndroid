@@ -1,6 +1,6 @@
 package qing.albatross.demo;
 
-import qing.albatross.annotation.ExecOption;
+import qing.albatross.annotation.ExecutionOption;
 import qing.albatross.annotation.DefOption;
 import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.TargetClass;
@@ -40,7 +40,7 @@ public class FieldRefTest {
       return;
     if (hook) {
       assert Albatross.hookClass(AH.class, A.class) == 4;
-      Albatross.compileClass(FieldRefTest.class, ExecOption.RECOMPILE_OPTIMIZED);
+      Albatross.compileClass(FieldRefTest.class, ExecutionOption.RECOMPILE_OPTIMIZED);
     } else {
       B.l = 666L;
       assert AH._b.equals(A.b);

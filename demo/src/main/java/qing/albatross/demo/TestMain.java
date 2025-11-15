@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import qing.albatross.annotation.ConstructorBackup;
 import qing.albatross.annotation.ConstructorHook;
-import qing.albatross.annotation.ExecOption;
+import qing.albatross.annotation.ExecutionOption;
 import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.MethodBackup;
 import qing.albatross.annotation.MethodHook;
@@ -88,8 +88,8 @@ public class TestMain {
     @FieldRef
     public int z;
 
-    @MethodBackup(targetExec = ExecOption.DECOMPILE)
-    @MethodHook(hookerExec = ExecOption.DECOMPILE)
+    @MethodBackup(targetExec = ExecutionOption.DECOMPILE)
+    @MethodHook(hookerExec = ExecutionOption.DECOMPILE)
     private void testCall(int i) {
       testCall(i + 2);
       assert this.z == i + 2;
@@ -138,6 +138,7 @@ public class TestMain {
     if (Debug.isDebuggerConnected()) {
       System.out.println("debugger isDebuggerConnected");
     }
+    HookTriggerTest.test();
     SearchFieldTest.test();
     SearchCallerTest.test();
     SafeToStringTest.test();
@@ -206,9 +207,7 @@ public class TestMain {
       }
       staticFieldTest2(hook);
     }
-    if (Albatross.getRuntimeISA() != Albatross.kArm)
-      testMainTest();
-
+    testMainTest();
     Albatross.backupAndHook(TestMain.class.getDeclaredMethod("testIntReturn"), TestMain.class.getDeclaredMethod("testReturnHook"), TestMain.class.getDeclaredMethod("testBackup"));
     Albatross.backupAndHook(PrintStream.class.getDeclaredMethod("println", String.class), TestMain.class.getDeclaredMethod("printlnHook", PrintStream.class, String.class), TestMain.class.getMethod("printlnBackup", PrintStream.class, String.class));
     Albatross.backup(A.class.getDeclaredMethod("a"), TestMain.class.getDeclaredMethod("aBackup", A.class));

@@ -4,7 +4,7 @@ import android.app.Activity;
 
 import java.lang.reflect.Method;
 
-import qing.albatross.annotation.ExecOption;
+import qing.albatross.annotation.ExecutionOption;
 import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.MethodHookBackup;
 import qing.albatross.annotation.TargetClass;
@@ -16,7 +16,7 @@ public class AotHookChainTest {
 
   static int callSeq = 0;
 
-  @TargetClass(targetExec = ExecOption.AOT)
+  @TargetClass(targetExec = ExecutionOption.AOT)
   private static class A0 {
 
     @FieldRef
@@ -39,7 +39,7 @@ public class AotHookChainTest {
 
   }
 
-  @TargetClass(targetExec = ExecOption.AOT)
+  @TargetClass(targetExec = ExecutionOption.AOT)
   private static class A1 {
 
 
@@ -54,7 +54,7 @@ public class AotHookChainTest {
 
   }
 
-  @TargetClass(targetExec = ExecOption.AOT)
+  @TargetClass(targetExec = ExecutionOption.AOT)
   private static class A2 {
 
     @MethodHookBackup
@@ -68,7 +68,7 @@ public class AotHookChainTest {
 
   }
 
-  @TargetClass(targetExec = ExecOption.AOT)
+  @TargetClass(targetExec = ExecutionOption.AOT)
   private static class A3 {
     @MethodHookBackup
     private void onResume() {
@@ -81,7 +81,7 @@ public class AotHookChainTest {
 
   }
 
-  @TargetClass(targetExec = ExecOption.AOT)
+  @TargetClass(targetExec = ExecutionOption.AOT)
   private static class A4 {
 
 
@@ -96,7 +96,7 @@ public class AotHookChainTest {
 
   }
 
-  @TargetClass(targetExec = ExecOption.AOT)
+  @TargetClass(targetExec = ExecutionOption.AOT)
   private static class A5 {
 
 
