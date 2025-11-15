@@ -16,10 +16,11 @@
 package qing.albatross.classloader;
 
 import dalvik.system.BaseDexClassLoader;
+import qing.albatross.annotation.ExecutionOption;
 import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.TargetClass;
 
-@TargetClass(BaseDexClassLoader.class)
+@TargetClass(value = BaseDexClassLoader.class,targetExec = ExecutionOption.DO_NOTHING)
 public class BaseDexClassLoaderH {
   @FieldRef
   public DexPathList pathList;
