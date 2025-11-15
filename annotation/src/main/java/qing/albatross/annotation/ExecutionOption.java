@@ -13,10 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.annotation;
 
-public class ExecOption {
+public class ExecutionOption {
   public static final int JIT_OSR = 1;
   public static final int JIT_BASELINE = 2;
   public static final int JIT_OPTIMIZED = 4;

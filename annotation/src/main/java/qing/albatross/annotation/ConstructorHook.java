@@ -15,7 +15,7 @@
  */
 package qing.albatross.annotation;
 
-import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
+import static qing.albatross.annotation.ExecutionOption.DEFAULT_OPTION;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -27,6 +27,7 @@ import java.lang.annotation.Target;
 public @interface ConstructorHook {
   String[] value() default {};
   String[] className() default {};
+  String triggerFieldName() default  "";
   Class<?> targetClass() default TargetClass.class;
   int hookerExec() default DEFAULT_OPTION;
   boolean required() default false;

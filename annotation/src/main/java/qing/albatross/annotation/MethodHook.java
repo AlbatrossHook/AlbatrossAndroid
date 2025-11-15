@@ -13,10 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.annotation;
 
-import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
+import static qing.albatross.annotation.ExecutionOption.DEFAULT_OPTION;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -31,6 +30,7 @@ public @interface MethodHook {
   String[] name() default {};
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
+  String triggerFieldName() default  "";
   int hookerExec() default DEFAULT_OPTION;
   boolean isStatic() default false;
   boolean required() default false;

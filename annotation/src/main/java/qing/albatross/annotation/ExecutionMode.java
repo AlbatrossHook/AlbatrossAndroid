@@ -13,10 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.annotation;
 
-import static qing.albatross.annotation.ExecOption.NATIVE_CODE;
+import static qing.albatross.annotation.ExecutionOption.NATIVE_CODE;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -25,6 +24,6 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface RunMode {
+public @interface ExecutionMode {
   int value() default NATIVE_CODE;
 }

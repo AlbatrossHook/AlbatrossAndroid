@@ -16,7 +16,7 @@
 
 package qing.albatross.annotation;
 
-import static qing.albatross.annotation.ExecOption.DEFAULT_OPTION;
+import static qing.albatross.annotation.ExecutionOption.DEFAULT_OPTION;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -31,6 +31,7 @@ public @interface StaticMethodHookBackup {
   String[] name() default {};
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
+  String triggerFieldName() default  "";
   int hookerExec() default DEFAULT_OPTION;
   int targetExec() default DEFAULT_OPTION;
   byte option() default DefOption.DEFAULT;
