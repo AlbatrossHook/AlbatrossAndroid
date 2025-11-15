@@ -13,26 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package qing.albatross.core;
+package qing.albatross.exception;
 
-import qing.albatross.annotation.ExecutionOption;
-import qing.albatross.annotation.TargetClass;
-import qing.albatross.classloader.DexCacheH;
-import qing.albatross.reflection.FieldDef;
-import qing.albatross.reflection.IntFieldDef;
+import java.lang.reflect.Method;
 
-@TargetClass(value = Class.class,targetExec = ExecutionOption.DO_NOTHING)
-public class ClassH {
+public class RequiredThisErr extends RequiredErr {
+  Method method;
 
-  static IntFieldDef objectSize;
-
-  static IntFieldDef classSize;
-
-  static IntFieldDef dexTypeIndex;
-
-  static IntFieldDef dexClassDefIndex;
-
-//  @FieldRef(option = DefOption.INSTANCE)
-//  DexCacheH dexCache;
-  static FieldDef<DexCacheH> dexCache;
+  public RequiredThisErr(Method method) {
+    super("Target method is not static,this method:" + method + " require an argument to save this,or make method not static");
+    this.method = method;
+  }
 }

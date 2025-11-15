@@ -93,6 +93,7 @@ public class MethodInvokeFrame {
     try {
       int first = getFirstArgReg(invocationContext);
       Object thiz = null;
+      boolean hasThisSlot = false;
       int i = first;
       Class<?>[] argTypes;
       int argCount;
@@ -101,6 +102,7 @@ public class MethodInvokeFrame {
         argCount = method.getParameterCount();
         if (!Modifier.isStatic(method.getModifiers())) {
           thiz = InstructionListener.GetVRegReference(invocationContext, first);
+          hasThisSlot = true;
           argCount += 1;
         }
         argTypes = method.getParameterTypes();
@@ -111,11 +113,12 @@ public class MethodInvokeFrame {
         if (!Modifier.isStatic(constructor.getModifiers())) {
           thiz = InstructionListener.GetVRegReference(invocationContext, first);
           argCount = argTypes.length + 1;
+          hasThisSlot = true;
         }
       }
       Object[] arguments = new Object[argCount];
       int slotIdx;
-      if (thiz == null) {
+      if (!hasThisSlot) {
         slotIdx = 0;
       } else {
         arguments[0] = thiz;
@@ -158,7 +161,57 @@ public class MethodInvokeFrame {
       Albatross.log("getArguments err", e);
       return null;
     }
+  }
 
+  public Object[] getStringArguments(long invocationContext) {
+    if (invocationContext == 0)
+      return null;
+    try {
+      int i = getFirstArgReg(invocationContext);
+      Class<?>[] argTypes;
+      int argCount;
+      int argIdx = 0;
+      if (member instanceof Method method) {
+        argCount = method.getParameterCount();
+        argTypes = method.getParameterTypes();
+        if (!Modifier.isStatic(method.getModifiers())) {
+          i += 1;
+        }
+
+      } else {
+        Constructor<?> constructor = (Constructor<?>) member;
+        argTypes = constructor.getParameterTypes();
+        argCount = argTypes.length;
+        if (!Modifier.isStatic(constructor.getModifiers())) {
+          i += 1;
+        }
+      }
+      if (argCount == 0)
+        return null;
+      Object[] arguments = new Object[argCount];
+      int slotIdx = 0;
+      for (; i < numberVRegs; i++) {
+        Class<?> t = argTypes[argIdx];
+        argIdx++;
+        if (t.isPrimitive()) {
+          if (t == long.class) {
+            i += 1;
+          } else if (t == double.class) {
+            i += 1;
+          }
+        } else if (t == String.class || t == StringBuilder.class) {
+          Object o = InstructionListener.GetVRegReference(invocationContext, i);
+          if (o != null) {
+            arguments[slotIdx] = o;
+            slotIdx++;
+          }
+        }
+      }
+      return arguments;
+    } catch (Throwable e) {
+      Albatross.log("getArguments err", e);
+      return null;
+    }
   }
 
 
