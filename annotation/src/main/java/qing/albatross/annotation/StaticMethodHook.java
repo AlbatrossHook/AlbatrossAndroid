@@ -31,6 +31,9 @@ public @interface StaticMethodHook {
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
   String triggerFieldName() default  "";
+  int minAppVersion() default 0;
+  int maxAppVersion() default 0x7fffffff;
+  int appVersion() default 0;
   int hookerExec() default DEFAULT_OPTION;
   byte option() default DefOption.DEFAULT;
   boolean required() default false;

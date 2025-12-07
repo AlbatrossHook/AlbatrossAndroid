@@ -29,6 +29,9 @@ public @interface ConstructorBackup {
   String[] value() default {};
   String[] className() default {};
   String triggerFieldName() default  "";
+  int minAppVersion() default 0;
+  int maxAppVersion() default 0x7fffffff;
+  int appVersion() default 0;
   Class<?> targetClass() default TargetClass.class;
   int targetExec() default DEFAULT_OPTION;
   byte option() default DefOption.DEFAULT;

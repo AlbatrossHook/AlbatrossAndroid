@@ -28,6 +28,9 @@ public @interface ConstructorHook {
   String[] value() default {};
   String[] className() default {};
   String triggerFieldName() default  "";
+  int minAppVersion() default 0;
+  int maxAppVersion() default 0x7fffffff;
+  int appVersion() default 0;
   Class<?> targetClass() default TargetClass.class;
   int hookerExec() default DEFAULT_OPTION;
   boolean required() default false;
@@ -35,4 +38,3 @@ public @interface ConstructorHook {
   byte minSdk() default 0;
   byte maxSdk() default 0;
 }
-

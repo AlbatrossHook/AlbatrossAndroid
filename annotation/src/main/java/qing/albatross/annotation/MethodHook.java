@@ -31,6 +31,9 @@ public @interface MethodHook {
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
   String triggerFieldName() default  "";
+  int minAppVersion() default 0;
+  int maxAppVersion() default 0x7fffffff;
+  int appVersion() default 0;
   int hookerExec() default DEFAULT_OPTION;
   boolean isStatic() default false;
   boolean required() default false;

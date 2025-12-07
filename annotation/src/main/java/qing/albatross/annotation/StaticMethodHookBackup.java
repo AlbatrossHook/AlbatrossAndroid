@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.annotation;
 
 import static qing.albatross.annotation.ExecutionOption.DEFAULT_OPTION;
@@ -32,6 +31,9 @@ public @interface StaticMethodHookBackup {
   Class<?> targetClass() default TargetClass.class;
   String[] className() default {};
   String triggerFieldName() default  "";
+  int minAppVersion() default 0;
+  int maxAppVersion() default 0x7fffffff;
+  int appVersion() default 0;
   int hookerExec() default DEFAULT_OPTION;
   int targetExec() default DEFAULT_OPTION;
   byte option() default DefOption.DEFAULT;
