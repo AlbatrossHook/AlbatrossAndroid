@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package qing.albatross.annotation;
 
 import java.lang.annotation.ElementType;
@@ -25,6 +24,7 @@ import java.lang.annotation.Target;
 @Target({ElementType.FIELD})
 public @interface ArgumentType {
   Class<?>[] value();
-
+  String[] className() default {};
+  Class<?> targetClass() default TargetClass.class;
   boolean exactSearch() default true;
 }
