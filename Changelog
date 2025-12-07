@@ -1,3 +1,9 @@
+version 3.3.0
+- For reflection annotations, it is supported to specify the class and class name
+- Support hook and backup limited effective app versions
+- Add the option targetClassExec to set whether the target class compiles other methods
+- Refactor the code related to the hook instruction
+
 version 3.2.0
  - Rename the annotations related to the execution mode
  - add triggerFieldName for more precise control over hook
