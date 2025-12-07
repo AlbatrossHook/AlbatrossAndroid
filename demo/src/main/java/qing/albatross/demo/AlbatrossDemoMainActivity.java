@@ -14,13 +14,16 @@ import android.widget.TextView;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
 import qing.albatross.annotation.ExecutionOption;
+import qing.albatross.common.AppMetaInfo;
 import qing.albatross.core.Albatross;
 import qing.albatross.core.InstructionListener;
+import qing.albatross.core.InvocationContext;
 import qing.albatross.demo.android.HandlerHook;
 import qing.albatross.exception.AlbatrossErr;
 import qing.albatross.exception.AlbatrossException;
@@ -32,7 +35,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   static boolean isLoad = false;
   protected TextView textView;
 
-  public static final int ALBATROSS_NATIVE_VERSION = 1;
+  public static final int ALBATROSS_NATIVE_VERSION = 2;
 
   public void fixLayout() {
     setContentView(R.layout.activity_albatross_demo_main);
@@ -81,6 +84,7 @@ public class AlbatrossDemoMainActivity extends Activity {
     String profileFile = Albatross.getProfileFilePath();
     Albatross.log("[*] " + packageName + ":" + processName + ":" + profileFile);
     assert (Albatross.currentApplication() == getApplication());
+    AppMetaInfo.fetchFromContext(this);
   }
 
   public void initByLoad(View view) {
@@ -261,28 +265,28 @@ public class AlbatrossDemoMainActivity extends Activity {
   InstructionListener listener = null;
 
   public void instruction(View view) throws NoSuchMethodException {
-    initAlbatross();
     if (listener == null) {
       Method getCaller = AlbatrossDemoMainActivity.class.getDeclaredMethod("getCaller", View.class);
-      listener = Albatross.hookInstruction(getCaller, 0, 10, (method, self, dexPc, invocationContext) -> {
-        assert dexPc <= 10;
-        assert dexPc >= 0;
-        assert method == getCaller;
-        if (self != AlbatrossDemoMainActivity.this) {
-          Albatross.log("self:" + self + " this:" + AlbatrossDemoMainActivity.this);
-        }
-        assert invocationContext.numberOfVRegs() == 7;
-        Albatross.log("[" + dexPc + "] " + invocationContext.smaliString());
-        Object receiver = invocationContext.getParamObject(0);
-        assert receiver == self;
-        Object v = invocationContext.getParamObject(1);
-        assert (v instanceof View);
-        if (dexPc == 4) {
+      listener = new InstructionListener() {
+        @Override
+        public void onEnter(Member method, Object self, int dexPc, InvocationContext invocationContext) {
+          assert dexPc <= 100;
+          assert dexPc >= 0;
+          assert method == getCaller;
+          assert self == AlbatrossDemoMainActivity.this;
+          assert invocationContext.numberOfVRegs() == 7;
+          Albatross.log("[" + dexPc + "] " + invocationContext.smaliString());
+          Object receiver = invocationContext.getParamObject(0, AlbatrossDemoMainActivity.class);
+          assert receiver == self;
+          View v = invocationContext.getParamObject(1, View.class);
+          if (dexPc == 4) {
 //          00003c44: 7100 b700 0000          0000: invoke-static       {}, Lqing/albatross/core/Albatross;->getCallerClass()Ljava/lang/Class; # method@00b7
 //          00003c4a: 0c00                    0003: move-result-object  v0
-          invocationContext.setVRegObject(0, AlbatrossDemoMainActivity.class);
+            invocationContext.setVRegObject(0, AlbatrossDemoMainActivity.class);
+          }
         }
-      });
+      };
+      assert Albatross.hookInstruction(getCaller, 0, 100, listener);
     } else {
       listener.unHook();
       listener = null;
@@ -292,19 +296,25 @@ public class AlbatrossDemoMainActivity extends Activity {
 
   InstructionListener onCreate = null;
 
-  public void hookOnCreate(View view) throws NoSuchMethodException {
+  public void hookOnCreate(View view) throws NoSuchMethodException, AlbatrossErr {
     if (onCreate == null) {
       Method getCaller = Activity.class.getDeclaredMethod("onCreate", Bundle.class);
-      onCreate = Albatross.hookInstruction(getCaller, 0, 200, (method, self, dexPc, invocationContext) -> {
-        assert self.getClass().equals(SecondActivity.class);
-        Albatross.log("[" + dexPc + "] " + invocationContext.smaliString());
-      });
+      onCreate = new InstructionListener() {
+        @Override
+        public void onEnter(Member method, Object self, int dexPc, InvocationContext invocationContext) {
+          assert self.getClass().equals(SecondActivity.class);
+          Albatross.log("[" + dexPc + "] " + invocationContext.smaliString());
+        }
+      };
+      assert Albatross.hookInstruction(getCaller, 0, 200, onCreate);
+      assert !Albatross.hookInstruction(getCaller, 0, 200, onCreate);
     } else {
       onCreate.unHook();
       onCreate = null;
     }
-    startActivity(new Intent(this, SecondActivity.class));
+    startActivityForResult(new Intent(this, SecondActivity.class), 1);
   }
+
 
   public void onResume() {
     textView.setText(getApplicationInfo().packageName + ":" + System.currentTimeMillis() + ",testing by continuously clicking the \"load\" button,确保so库是最新的");

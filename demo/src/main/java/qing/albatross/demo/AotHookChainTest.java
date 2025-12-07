@@ -125,6 +125,8 @@ public class AotHookChainTest {
 
 
   static void test() throws AlbatrossErr {
+    if (!Albatross.isMainThread())
+      return;
     int a0 = Albatross.hookClass(A0.class, Activity.class);
     int a3 = Albatross.hookClass(A3.class, Activity.class);
     int a1 = Albatross.hookClass(A1.class, Activity.class);

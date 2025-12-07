@@ -136,8 +136,10 @@ public class TestMain {
 
   public static void main(boolean hook) throws Exception {
     if (Debug.isDebuggerConnected()) {
-      System.out.println("debugger isDebuggerConnected");
+      System.out.println("is debugger connected");
     }
+    InsHookTest.test();
+    AppVersionTest.test();
     HookTriggerTest.test();
     SearchFieldTest.test();
     SearchCallerTest.test();
