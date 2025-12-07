@@ -20,17 +20,23 @@ import java.lang.reflect.Member;
 import qing.albatross.annotation.Alias;
 
 
-public class InstructionListener extends MethodInvokeFrame {
+public abstract class InstructionListener extends MethodInvokeFrame {
 
-  InstructionCallback callback;
   long listenerId = 0;
 
+  abstract public void onEnter(Member method, Object self, int dexPc, InvocationContext invocationContext);
 
-  public synchronized void unHook() {
+  public void onReturn(Member method, Object ret, int dexPc, InvocationContext invocationContext) {
+  }
+
+  @Override
+  public synchronized boolean unHook() {
     if (listenerId != 0) {
       unHookInstructionNative(listenerId);
       listenerId = 0;
+      return true;
     }
+    return false;
   }
 
   //All these native methods register by Albatross.registerMethodNative
@@ -65,6 +71,6 @@ public class InstructionListener extends MethodInvokeFrame {
 
   @Alias("onEnter")
   private void onEnter(Object self, int dexPc, long invocationContext) {
-    callback.onEnter(member, self, dexPc, new InvocationContext(invocationContext, this));
+    onEnter(member, self, dexPc, new InvocationContext(invocationContext, this));
   }
 }

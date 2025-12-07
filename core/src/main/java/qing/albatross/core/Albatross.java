@@ -72,6 +72,7 @@ import qing.albatross.classloader.BaseDexClassLoaderH;
 import qing.albatross.classloader.ClassLoaderHook;
 import qing.albatross.classloader.DexCacheH;
 import qing.albatross.classloader.Element;
+import qing.albatross.common.AppMetaInfo;
 import qing.albatross.common.HookResult;
 import qing.albatross.common.SafeToString;
 import qing.albatross.exception.AlbatrossErr;
@@ -419,14 +420,26 @@ public final class Albatross {
         if (methodCodeSize != 0 && methodCodeSize < inline_max_code_units) {
           int modifier = target.getModifiers();
           boolean aPrivate = Modifier.isPrivate(modifier);
-          if ((!aPrivate) && !(target.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader))
-            return true;
-          if (aPrivate || Modifier.isFinal(modifier) || Modifier.isStatic(modifier)) {
-            searchMethodCaller(target, (m, i) -> {
-              Albatross.log("try decompile:" + methodToString(m));
+          if (aPrivate || (!(target.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader))) {
+            searchMethodCallerFromClass(target, target.getDeclaringClass(), (m, i) -> {
+              Albatross.log("try decompile:" + methodToString(m) + " for " + methodToString(target));
               toDecompileMethod.add(m);
               return true;
-            }, true, true);
+            }, true);
+            return true;
+          }
+          if (Modifier.isFinal(modifier) || Modifier.isStatic(modifier)) {
+            searchMethodCaller(target, (m, i) -> {
+              Albatross.log("try decompile:" + methodToString(m) + " for " + methodToString(target));
+              toDecompileMethod.add(m);
+              return true;
+            }, true, SearchClassCallback.SCOPE_APPLICATION);
+          } else {
+            searchMethodCallerFromClass(target, target.getDeclaringClass(), (m, i) -> {
+              Albatross.log("try decompile:" + methodToString(m) + " for " + methodToString(target));
+              toDecompileMethod.add(m);
+              return true;
+            }, true);
           }
         }
       }
@@ -539,36 +552,36 @@ public final class Albatross {
   public static native int getMethodCodeSize(Member target);
 
 
-  public static InstructionListener hookInstruction(Member member, int dexPc, InstructionCallback callback) {
-    return hookInstruction(member, dexPc, dexPc, callback, DO_NOTHING);
+  public static boolean hookInstruction(Member member, int dexPc, InstructionListener listener) {
+    return hookInstruction(member, dexPc, dexPc, listener, DO_NOTHING);
   }
 
-  public static InstructionListener hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionCallback callback) {
-    if (containsFlags(FLAG_NO_COMPILE) || (maxDexPc - minDexPc < 15))
-      return hookInstruction(member, minDexPc, maxDexPc, callback, DO_NOTHING);
+  public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener) {
+    if (containsFlags(FLAG_NO_COMPILE) || (maxDexPc - minDexPc < 15) || getMethodCodeSize(member) < 25)
+      return hookInstruction(member, minDexPc, maxDexPc, listener, DO_NOTHING);
     if (maxDexPc - minDexPc > 25) {
-      return hookInstruction(member, minDexPc, maxDexPc, callback, NATIVE_CODE);
+      return hookInstruction(member, minDexPc, maxDexPc, listener, NATIVE_CODE);
     }
-    return hookInstruction(member, minDexPc, maxDexPc, callback, AOT);
+    return hookInstruction(member, minDexPc, maxDexPc, listener, AOT);
   }
 
 
-  public static InstructionListener hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionCallback callback, int compile) {
-    InstructionListener listener = new InstructionListener();
+  public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener, int compile) {
+    if(listener.listenerId!=0)
+      return false;
     if (Modifier.isStatic(member.getModifiers())) {
       ensureClassInitialized(member.getDeclaringClass());
     }
     long listenerId = hookInstructionNative(member, minDexPc, maxDexPc, listener);
     if (listenerId > 4096 || listenerId < 0) {
       listener.listenerId = listenerId;
-      listener.callback = callback;
       if (compile != DO_NOTHING) {
-        compileClass(callback.getClass(), compile);
+        compileClass(listener.getClass(), compile);
       }
       listener.member = member;
-      return listener;
+      return true;
     }
-    return null;
+    return false;
   }
 
   public static MethodCallHook hookMethod(Member member, MethodCallback callback, int compile) {
@@ -609,6 +622,8 @@ public final class Albatross {
   }
 
   public static native long entryPointFromQuickCompiledCode(Member method);
+
+  public static native long entryPointAddress(Member member);
 
   public static int compileClass(Class<?> clazz, int compileOption) {
     if (containsFlags(FLAG_NO_COMPILE))
@@ -935,6 +950,12 @@ public final class Albatross {
         SafeToString.safeToString(null);
         compileClass(SafeToString.class, NATIVE_CODE);
         compileClassByAnnotation(Albatross.class, DO_NOTHING);
+//        if (AppMetaInfo.packageName == null && (flags & FLAG_INJECT) == 0) {
+//          Application app = Albatross.currentApplication();
+//          if (app != null) {
+//            AppMetaInfo.fetchFromContext(app);
+//          }
+//        }
         return true;
       } else {
         initStatus |= STATUS_INIT_FAIL | FLAG_FIELD_BACKUP_BAN;
@@ -1395,6 +1416,7 @@ public final class Albatross {
     int hookerDefaultExecOption = defaultHookerExecMode;
     int hookerBackupDefaultExecOption = defaultHookerBackupExecMode;
     int targetDefaultExecOption = defaultTargetExecMode;
+    int targetClassExecOption = DO_NOTHING;
     boolean isDebug = Debug.isDebuggerConnected();
     TargetClass targetClassAnno = hooker.getAnnotation(TargetClass.class);
     boolean isMirror = true;
@@ -1404,6 +1426,7 @@ public final class Albatross {
         int hookerExecOption = targetClassAnno.hookerExec();
         int targetExecOption = targetClassAnno.targetExec();
         int hookerBackupExecOption = targetClassAnno.hookerBackupExec();
+        targetClassExecOption = targetClassAnno.targetClassExec();
         if (hookerExecOption != DEFAULT_OPTION) {
           hookerDefaultExecOption = hookerExecOption;
         }
@@ -1418,19 +1441,21 @@ public final class Albatross {
     if (defaultClass == null) {
       if (targetClassAnno != null) {
         defaultClass = getTargetClassFromAnnotation(targetClassAnno, loader);
-        if (defaultClass == TargetClass.class)
-          defaultClass = null;
-        if (defaultClass != null) {
-          if (loader == null)
-            loader = defaultClass.getClassLoader();
-        } else if (targetClassAnno.pendingHook()) {
-          String[] classNames = targetClassAnno.className();
-          for (String className : classNames) {
-            addPendingHook(className, hooker);
+        if (defaultClass != TargetClass.class) {
+          if (defaultClass != null) {
+            if (loader == null)
+              loader = defaultClass.getClassLoader();
+          } else if (targetClassAnno.pendingHook()) {
+            String[] classNames = targetClassAnno.className();
+            for (String className : classNames) {
+              addPendingHook(className, hooker);
+            }
+            return 0;
+          } else if (targetClassAnno.required()) {
+            throw new RequiredClassErr(targetClassAnno);
           }
-          return 0;
-        } else if (targetClassAnno.required()) {
-          throw new RequiredClassErr(targetClassAnno);
+        } else {
+          defaultClass = null;
         }
       }
     } else {
@@ -1532,8 +1557,8 @@ public final class Albatross {
           continue;
         }
       }
-      if (defaultClass == null)
-        continue;
+//      if (defaultClass == null)
+//        continue;
       Class<?> type = field.getType();
       if (!isStatic) {
         if (field.getAnnotation(FieldRef.class) == null) {
@@ -1559,6 +1584,8 @@ public final class Albatross {
           field.setAccessible(true);
           Constructor<? extends ReflectionBase> constructor = fieldConfig.constructor;
           if (!fieldConfig.needClz) {
+            if (defaultClass == null)
+              continue;
             Field targetField = ReflectUtils.findField(defaultClass, field.getName());
             Class<?> expectClass = fieldConfig.clz;
             Class<?> targetFieldType = targetField.getType();
@@ -1655,6 +1682,9 @@ public final class Albatross {
       }
       byte minSdk;
       byte maxSdk;
+      int minAppVersion;
+      int maxAppVersion;
+      int currentAppVersion = AppMetaInfo.versionCode;
       boolean targetStatic;
       Class<?> targetClass;
       String[] className;
@@ -1678,6 +1708,13 @@ public final class Albatross {
         maxSdk = hookBackup.maxSdk();
         callWay = hookBackup.callWay();
         hookTriggerFieldName = hookBackup.triggerFieldName();
+        int versionCode = hookBackup.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = hookBackup.minAppVersion();
+          maxAppVersion = hookBackup.maxAppVersion();
+        }
       } else if ((methodHook = m.getAnnotation(MethodHook.class)) != null) {
         targetStatic = methodHook.isStatic();
         targetClass = methodHook.targetClass();
@@ -1697,6 +1734,13 @@ public final class Albatross {
         minSdk = methodHook.minSdk();
         maxSdk = methodHook.maxSdk();
         hookTriggerFieldName = methodHook.triggerFieldName();
+        int versionCode = methodHook.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = methodHook.minAppVersion();
+          maxAppVersion = methodHook.maxAppVersion();
+        }
       } else if ((staticMethodHook = m.getAnnotation(StaticMethodHook.class)) != null) {
         targetStatic = true;
         targetClass = staticMethodHook.targetClass();
@@ -1716,6 +1760,13 @@ public final class Albatross {
         minSdk = staticMethodHook.minSdk();
         maxSdk = staticMethodHook.maxSdk();
         hookTriggerFieldName = staticMethodHook.triggerFieldName();
+        int versionCode = staticMethodHook.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = staticMethodHook.minAppVersion();
+          maxAppVersion = staticMethodHook.maxAppVersion();
+        }
       } else if ((staticMethodHookBackup = m.getAnnotation(StaticMethodHookBackup.class)) != null) {
         targetStatic = true;
         targetClass = staticMethodHookBackup.targetClass();
@@ -1732,6 +1783,13 @@ public final class Albatross {
         maxSdk = staticMethodHookBackup.maxSdk();
         callWay = staticMethodHookBackup.callWay();
         hookTriggerFieldName = staticMethodHookBackup.triggerFieldName();
+        int versionCode = staticMethodHookBackup.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = staticMethodHookBackup.minAppVersion();
+          maxAppVersion = staticMethodHookBackup.maxAppVersion();
+        }
       } else if ((constructorHook = m.getAnnotation(ConstructorHook.class)) != null) {
         hookWay = HookAction.HOOK_CONSTRUCTOR;
         targetStatic = false;
@@ -1750,6 +1808,13 @@ public final class Albatross {
         minSdk = constructorHook.minSdk();
         maxSdk = constructorHook.maxSdk();
         hookTriggerFieldName = constructorHook.triggerFieldName();
+        int versionCode = constructorHook.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = constructorHook.minAppVersion();
+          maxAppVersion = constructorHook.maxAppVersion();
+        }
       } else if ((constructorHookBackup = m.getAnnotation(ConstructorHookBackup.class)) != null) {
         hookWay = HookAction.HOOK_CONSTRUCTOR;
         targetClass = constructorHookBackup.targetClass();
@@ -1765,6 +1830,13 @@ public final class Albatross {
         maxSdk = constructorHookBackup.maxSdk();
         callWay = constructorHookBackup.callWay();
         hookTriggerFieldName = constructorHookBackup.triggerFieldName();
+        int versionCode = constructorHookBackup.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = constructorHookBackup.minAppVersion();
+          maxAppVersion = constructorHookBackup.maxAppVersion();
+        }
       } else if ((methodBackup = m.getAnnotation(MethodBackup.class)) != null) {
         targetStatic = methodBackup.isStatic();
         targetClass = methodBackup.targetClass();
@@ -1779,6 +1851,13 @@ public final class Albatross {
         maxSdk = methodBackup.maxSdk();
         callWay = methodBackup.callWay();
         hookTriggerFieldName = methodBackup.triggerFieldName();
+        int versionCode = methodBackup.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = methodBackup.minAppVersion();
+          maxAppVersion = methodBackup.maxAppVersion();
+        }
       } else if ((staticMethodBackup = m.getAnnotation(StaticMethodBackup.class)) != null) {
         targetStatic = true;
         targetClass = staticMethodBackup.targetClass();
@@ -1793,6 +1872,13 @@ public final class Albatross {
         maxSdk = staticMethodBackup.maxSdk();
         callWay = staticMethodBackup.callWay();
         hookTriggerFieldName = staticMethodBackup.triggerFieldName();
+        int versionCode = staticMethodBackup.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = staticMethodBackup.minAppVersion();
+          maxAppVersion = staticMethodBackup.maxAppVersion();
+        }
       } else if ((constructorBackup = m.getAnnotation(ConstructorBackup.class)) != null) {
         targetClass = constructorBackup.targetClass();
         classNameArgs = constructorBackup.value();
@@ -1806,6 +1892,13 @@ public final class Albatross {
         maxSdk = constructorBackup.maxSdk();
         callWay = constructorBackup.callWay();
         hookTriggerFieldName = constructorBackup.triggerFieldName();
+        int versionCode = constructorBackup.appVersion();
+        if (versionCode != 0) {
+          minAppVersion = maxAppVersion = versionCode;
+        } else {
+          minAppVersion = constructorBackup.minAppVersion();
+          maxAppVersion = constructorBackup.maxAppVersion();
+        }
       } else {
         if (!Modifier.isStatic(m.getModifiers()))
           if (isMirror)
@@ -1836,6 +1929,8 @@ public final class Albatross {
         if (sdk > maxSdk)
           continue;
       }
+      if (currentAppVersion < minAppVersion || currentAppVersion > maxAppVersion)
+        continue;
       Class<?>[] mParameterTypes = m.getParameterTypes();
       Annotation[][] parameterAnnotations = m.getParameterAnnotations();
       boolean isHookStatic = Modifier.isStatic(m.getModifiers());
@@ -2145,22 +2240,21 @@ public final class Albatross {
         log("Failed to mirror " + target + ": backup=" + backup, t);
       }
     }
-
-
     if (!isDebug) {
       if (hookerDefaultExecOption != DO_NOTHING) {
-        compileClass(hooker, hookerDefaultExecOption);
-      }
-      if (defaultClass != null && targetDefaultExecOption != DO_NOTHING) {
         if (runModeAnnotationCount == 0)
-          compileClass(defaultClass, hookerDefaultExecOption);
+          compileClass(hooker, hookerDefaultExecOption);
         else
-          compileClassByAnnotation(defaultClass, hookerDefaultExecOption);
+          compileClassByAnnotation(hooker, hookerDefaultExecOption);
+      }
+      if (defaultClass != null && targetClassExecOption != DO_NOTHING) {
+        Albatross.log("try compile targetClass:" + defaultClass.getName());
+        compileClass(defaultClass, targetClassExecOption);
       }
     }
-    if (!dependencies.isEmpty()) {
-      successCount += hookDependency(dependencies);
-    }
+//    if (!dependencies.isEmpty()) {
+//      successCount += hookDependency(dependencies);
+//    }
     return successCount;
   }
 
@@ -2976,18 +3070,20 @@ public final class Albatross {
     return searchObjectNative(clz, callback);
   }
 
+  public static int searchMethodCallerFromClass(Member method, Class<?> clz, SearchCallback<Member> callback, boolean pickFirst) {
+    return searchMethodCallerNative(clz, method, callback, pickFirst, -2);
+  }
+
   @ExecutionMode
-  public static int searchMethodCaller(Member method, SearchCallback<Member> callback, boolean pickFirst, boolean searchPlatform) {
+  public static int searchMethodCaller(Member method, SearchCallback<Member> callback, boolean pickFirst, int searchScope) {
     Class<?> declaringClass = method.getDeclaringClass();
     ClassLoader defineLoader = declaringClass.getClassLoader();
     MethodSearchCallback callbackDelegate = new MethodSearchCallback(callback);
     if (!(defineLoader instanceof BaseDexClassLoader)) {
-      int searchScope;
       Map<Long, Integer> dexRefTable = new HashMap<>();
-      if (searchPlatform) {
+      if (searchScope == 0) {
         searchScope = SearchClassCallback.SCOPE_APPLICATION | SearchClassCallback.SCOPE_PLATFORM;
-      } else
-        searchScope = SearchClassCallback.SCOPE_APPLICATION;
+      }
       searchClass((c, p) -> {
         int refId = dexRefTable.computeIfAbsent(p, x -> dexFileRefMethodNative(method, p));
         if (refId < 0)
@@ -3045,7 +3141,7 @@ public final class Albatross {
       if (toDecompileMethod != null)
         Albatross.getMainHandler().postDelayed(() -> {
           Albatross.log("new classLoader append:" + loader);
-        }, 3000);
+        }, 5000);
     }
     return true;
   }
@@ -3104,6 +3200,8 @@ public final class Albatross {
   public static boolean syncAppClassLoader() {
     appendLoader(Albatross.class.getClassLoader());
     Application application = currentApplication();
+    if (application == null)
+      return false;
     if (application.getClass().getName().startsWith("android.app.")) {
       Context context = application.getBaseContext();
       return false;

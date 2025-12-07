@@ -22,50 +22,100 @@ import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
+import qing.albatross.common.SafeToString;
+
 public class MethodInvokeFrame {
   public Member member;
   protected int numberVRegs = -1;
   protected int firstArgReg = -1;
+  Class<?>[] parameterTypes;
+  static final int FLAG_GET_SLOW = 1;
+  static final int FLAG_STRING_ARGS = 2;
+  static final int FLAG_STRING_CONVERT = 4;
+  private int frameFlags;
+
+  static final Class<?>[] emptyParameterTypes = new Class[0];
+  static final Object[] emptyArguments = new Object[0];
 
   public void setMember(Member member) {
     if (member != this.member) {
       this.member = member;
       firstArgReg = -1;
       numberVRegs = -1;
+      frameFlags = 0;
     }
   }
+
+  public  boolean unHook(){
+    return false;
+  }
+
+  void createParameterTypeList(int count) {
+    if (parameterTypes != null && parameterTypes.length == count)
+      return;
+    if (count == 0) {
+      parameterTypes = emptyParameterTypes;
+    } else
+      parameterTypes = new Class[count];
+  }
+
 
   public int getFirstArgReg(long invocationContext) {
     if (firstArgReg >= 0)
       return firstArgReg;
     numberVRegs = NumberOfVRegs(invocationContext);
+    Class<?>[] paramTypes;
+    int argUsedVregCount = 0;
     if (member instanceof Method method) {
-      int argUsedVregCount = 0;
-      Class<?>[] parameterTypes = method.getParameterTypes();
-      for (Class<?> c : parameterTypes) {
-        if (c == long.class || c == double.class) {
-          argUsedVregCount += 2;
-        } else
-          argUsedVregCount += 1;
-      }
-      if (!Modifier.isStatic(method.getModifiers()))
+      paramTypes = method.getParameterTypes();
+      if (!Modifier.isStatic(method.getModifiers())) {
+        createParameterTypeList(paramTypes.length + 1);
+        Class<?> declaringClass = method.getDeclaringClass();
+        parameterTypes[0] = declaringClass;
         argUsedVregCount += 1;
-      firstArgReg = numberVRegs - argUsedVregCount;
+        if (SafeToString.isSafeToString(declaringClass))
+          frameFlags |= FLAG_STRING_CONVERT;
+      } else
+        createParameterTypeList(paramTypes.length);
     } else {
       Constructor<?> constructor = (Constructor<?>) member;
-      Class<?>[] parameterTypes = constructor.getParameterTypes();
-      int argUsedVregCount = 1;
-      if (Modifier.isStatic(constructor.getModifiers()))
-        argUsedVregCount = 0;
-      for (Class<?> c : parameterTypes) {
-        if (c == long.class || c == double.class) {
-          argUsedVregCount += 2;
-        } else
-          argUsedVregCount += 1;
-      }
-      firstArgReg = numberVRegs - argUsedVregCount;
+      paramTypes = constructor.getParameterTypes();
+      if (!Modifier.isStatic(constructor.getModifiers())) {
+        createParameterTypeList(paramTypes.length + 1);
+        Class<?> declaringClass = constructor.getDeclaringClass();
+        if (SafeToString.isSafeToString(declaringClass))
+          frameFlags |= FLAG_STRING_CONVERT;
+        parameterTypes[0] = declaringClass;
+        argUsedVregCount = 1;
+      } else
+        createParameterTypeList(paramTypes.length);
     }
+    int slotIdx = argUsedVregCount;
+    for (Class<?> c : paramTypes) {
+      argUsedVregCount += 1;
+      if (c == String.class || c == StringBuilder.class || c == StringBuffer.class) {
+        frameFlags |= FLAG_STRING_ARGS | FLAG_STRING_CONVERT;
+      } else if (c.isPrimitive() || SafeToString.isSafeToString(c)) {
+        frameFlags |= FLAG_STRING_CONVERT;
+        if (c == long.class || c == double.class) {
+          frameFlags |= FLAG_GET_SLOW;
+          argUsedVregCount += 1;
+        }
+      }
+      parameterTypes[slotIdx] = c;
+      slotIdx++;
+    }
+    firstArgReg = numberVRegs - argUsedVregCount;
     return firstArgReg;
+  }
+
+  public Class<?>[] getParameterTypes(long invocationContext) {
+    if (firstArgReg >= 0)
+      return parameterTypes;
+    if (invocationContext == 0)
+      return null;
+    getFirstArgReg(invocationContext);
+    return parameterTypes;
   }
 
   public int getNumberVRegs(long invocationContext) {
@@ -75,11 +125,132 @@ public class MethodInvokeFrame {
     return numberVRegs;
   }
 
+
   public int getArgReg(long invocationContext, int i) {
-    int idx = getFirstArgReg(invocationContext) + i;
+    int idx = getFirstArgReg(invocationContext);
+    if ((frameFlags & FLAG_GET_SLOW) == 0)
+      idx = +i;
+    else {
+      for (int z = 0; z < i; z++) {
+        Class<?> argType = parameterTypes[z];
+        if (argType == double.class || argType == long.class) {
+          idx += 2;
+        } else
+          idx += 1;
+      }
+    }
     assert idx < numberVRegs;
     return idx;
   }
+
+  public void setParamObject(long invocationContext, int i, Object o) {
+    int idx = getFirstArgReg(invocationContext);
+    assert o == null || parameterTypes[i].isAssignableFrom(o.getClass());
+    if ((frameFlags & FLAG_GET_SLOW) == 0)
+      idx += i;
+    else {
+      for (int z = 0; z < i; z++) {
+        Class<?> argType = parameterTypes[z];
+        if (argType == double.class || argType == long.class) {
+          idx += 2;
+        } else
+          idx += 1;
+      }
+    }
+    assert idx < numberVRegs;
+    InstructionListener.SetVRegReference(invocationContext, idx, o);
+  }
+
+  public <T> int setParamPrim(long invocationContext, int i, int v, Class<T> clz) {
+    int idx = getFirstArgReg(invocationContext);
+    assert clz == parameterTypes[i];
+    if ((frameFlags & FLAG_GET_SLOW) == 0)
+      idx += i;
+    else {
+      for (int z = 0; z < i; z++) {
+        Class<?> argType = parameterTypes[z];
+        if (argType == double.class || argType == long.class) {
+          idx += 2;
+        } else
+          idx += 1;
+      }
+    }
+    assert idx < numberVRegs;
+    return InstructionListener.SetVReg(invocationContext, idx, v);
+  }
+
+  public double setParamDouble(long invocationContext, int i, double v) {
+    assert parameterTypes[i] == double.class;
+    int idx = getArgReg(invocationContext, i);
+    return InstructionListener.SetVRegDouble(invocationContext, idx, v);
+  }
+
+  public long setParamLong(long invocationContext, int i, long v) {
+    assert parameterTypes[i] == long.class;
+    int idx = getArgReg(invocationContext, i);
+    return InstructionListener.SetVRegLong(invocationContext, idx, v);
+  }
+
+  public float setParamFloat(long invocationContext, int i, float v) {
+    assert parameterTypes[i] == float.class;
+    int idx = getArgReg(invocationContext, i);
+    return InstructionListener.SetVRegFloat(invocationContext, idx, v);
+  }
+
+  public <T> T getParamObject(long invocationContext, int i, Class<T> clz) {
+    int idx = getFirstArgReg(invocationContext);
+    assert parameterTypes[i].isAssignableFrom(clz);
+    if ((frameFlags & FLAG_GET_SLOW) == 0)
+      idx += i;
+    else {
+      for (int z = 0; z < i; z++) {
+        Class<?> argType = parameterTypes[z];
+        if (argType == double.class || argType == long.class) {
+          idx += 2;
+        } else
+          idx += 1;
+      }
+    }
+    assert idx < numberVRegs;
+    return (T) InstructionListener.GetVRegReference(invocationContext, idx);
+  }
+
+  public int getParamPrim(long invocationContext, int i, Class<?> clz) {
+    int idx = getFirstArgReg(invocationContext);
+    assert clz == parameterTypes[i];
+    if ((frameFlags & FLAG_GET_SLOW) == 0)
+      idx += i;
+    else {
+      for (int z = 0; z < i; z++) {
+        Class<?> argType = parameterTypes[z];
+        if (argType == double.class || argType == long.class) {
+          idx += 2;
+        } else
+          idx += 1;
+      }
+    }
+    assert idx < numberVRegs;
+    return InstructionListener.GetVReg(invocationContext, idx);
+  }
+
+  public double getParamDouble(long invocationContext, int i) {
+    assert parameterTypes[i] == double.class;
+    int idx = getArgReg(invocationContext, i);
+    return InstructionListener.GetVRegDouble(invocationContext, idx);
+  }
+
+  public long getParamLong(long invocationContext, int i) {
+    assert parameterTypes[i] == long.class;
+    int idx = getArgReg(invocationContext, i);
+    return InstructionListener.GetVRegLong(invocationContext, idx);
+  }
+
+  public float getParamFloat(long invocationContext, int i) {
+    assert parameterTypes[i] == float.class;
+    int idx = getArgReg(invocationContext, i);
+    return InstructionListener.GetVRegFloat(invocationContext, idx);
+  }
+
 
   public int getArgRegTwoWord(long invocationContext, int i) {
     int idx = getFirstArgReg(invocationContext) + i;
@@ -92,46 +263,20 @@ public class MethodInvokeFrame {
       return null;
     try {
       int first = getFirstArgReg(invocationContext);
-      Object thiz = null;
-      boolean hasThisSlot = false;
+      if (parameterTypes.length == 0) {
+        return emptyArguments;
+      }
       int i = first;
-      Class<?>[] argTypes;
-      int argCount;
+      Class<?>[] argTypes = parameterTypes;
+      int argCount = parameterTypes.length;
       int argIdx = 0;
-      if (member instanceof Method method) {
-        argCount = method.getParameterCount();
-        if (!Modifier.isStatic(method.getModifiers())) {
-          thiz = InstructionListener.GetVRegReference(invocationContext, first);
-          hasThisSlot = true;
-          argCount += 1;
-        }
-        argTypes = method.getParameterTypes();
-      } else {
-        Constructor<?> constructor = (Constructor<?>) member;
-        argTypes = constructor.getParameterTypes();
-        argCount = argTypes.length;
-        if (!Modifier.isStatic(constructor.getModifiers())) {
-          thiz = InstructionListener.GetVRegReference(invocationContext, first);
-          argCount = argTypes.length + 1;
-          hasThisSlot = true;
-        }
-      }
       Object[] arguments = new Object[argCount];
-      int slotIdx;
-      if (!hasThisSlot) {
-        slotIdx = 0;
-      } else {
-        arguments[0] = thiz;
-        i += 1;
-        slotIdx = 1;
-      }
       for (; i < numberVRegs; i++) {
         Class<?> t = argTypes[argIdx];
-        argIdx++;
         if (t.isPrimitive()) {
           Object valueObject;
           if (t == int.class) {
-            valueObject = (int) InstructionListener.GetVReg(invocationContext, i);
+            valueObject = InstructionListener.GetVReg(invocationContext, i);
           } else if (t == boolean.class) {
             valueObject = InstructionListener.GetVReg(invocationContext, i) != 0;
           } else if (t == char.class) {
@@ -151,10 +296,56 @@ public class MethodInvokeFrame {
           } else {
             valueObject = (short) InstructionListener.GetVRegLong(invocationContext, i);
           }
-          arguments[slotIdx] = valueObject;
+          arguments[argIdx] = valueObject;
         } else
-          arguments[slotIdx] = InstructionListener.GetVRegReference(invocationContext, i);
-        slotIdx++;
+          arguments[argIdx] = InstructionListener.GetVRegReference(invocationContext, i);
+        argIdx++;
+      }
+      return arguments;
+    } catch (Throwable e) {
+      Albatross.log("getArguments err", e);
+      return null;
+    }
+  }
+
+  public Object[] getToStringArguments(long invocationContext) {
+    if (invocationContext == 0)
+      return null;
+    try {
+      int i = getFirstArgReg(invocationContext);
+      if ((frameFlags & FLAG_STRING_CONVERT) == 0)
+        return emptyArguments;
+      Class<?>[] argTypes = parameterTypes;
+      int argCount = parameterTypes.length;
+      Object[] arguments = new Object[argCount];
+      int argIdx = 0;
+      for (; i < numberVRegs; i++) {
+        Class<?> t = argTypes[argIdx];
+        if (t.isPrimitive()) {
+          if (t == long.class) {
+            long valueObject = InstructionListener.GetVRegLong(invocationContext, i);
+            arguments[argIdx] = valueObject;
+            i += 1;
+          } else if (t == double.class) {
+            double valueObject = InstructionListener.GetVRegDouble(invocationContext, i);
+            arguments[argIdx] = valueObject;
+            i += 1;
+          } else {
+            int valueObject = InstructionListener.GetVReg(invocationContext, i);
+            arguments[argIdx] = valueObject;
+          }
+        } else if (t == String.class || t == StringBuilder.class) {
+          Object o = InstructionListener.GetVRegReference(invocationContext, i);
+          if (o != null) {
+            arguments[argIdx] = o;
+          }
+        } else if (SafeToString.isSafeToString(t)) {
+          Object o = InstructionListener.GetVRegReference(invocationContext, i);
+          if (o != null) {
+            arguments[argIdx] = o.toString();
+          }
+        }
+        argIdx++;
       }
       return arguments;
     } catch (Throwable e) {
@@ -168,44 +359,32 @@ public class MethodInvokeFrame {
       return null;
     try {
       int i = getFirstArgReg(invocationContext);
-      Class<?>[] argTypes;
-      int argCount;
-      int argIdx = 0;
-      if (member instanceof Method method) {
-        argCount = method.getParameterCount();
-        argTypes = method.getParameterTypes();
-        if (!Modifier.isStatic(method.getModifiers())) {
-          i += 1;
-        }
-
-      } else {
-        Constructor<?> constructor = (Constructor<?>) member;
-        argTypes = constructor.getParameterTypes();
-        argCount = argTypes.length;
-        if (!Modifier.isStatic(constructor.getModifiers())) {
-          i += 1;
-        }
-      }
-      if (argCount == 0)
-        return null;
+      if ((frameFlags & FLAG_STRING_ARGS) == 0)
+        return emptyArguments;
+      Class<?>[] argTypes = parameterTypes;
+      int argCount = parameterTypes.length;
       Object[] arguments = new Object[argCount];
-      int slotIdx = 0;
+      int argIdx = 0;
       for (; i < numberVRegs; i++) {
         Class<?> t = argTypes[argIdx];
-        argIdx++;
         if (t.isPrimitive()) {
           if (t == long.class) {
             i += 1;
           } else if (t == double.class) {
             i += 1;
           }
-        } else if (t == String.class || t == StringBuilder.class) {
+        } else if (t == String.class || t == StringBuilder.class || t == StringBuffer.class) {
           Object o = InstructionListener.GetVRegReference(invocationContext, i);
           if (o != null) {
-            arguments[slotIdx] = o;
-            slotIdx++;
+            arguments[argIdx] = o.toString();
+          }
+        } else if (SafeToString.isSafeToString(t)) {
+          Object o = InstructionListener.GetVRegReference(invocationContext, i);
+          if (o != null) {
+            arguments[argIdx] = o.toString();
           }
         }
+        argIdx++;
       }
       return arguments;
     } catch (Throwable e) {

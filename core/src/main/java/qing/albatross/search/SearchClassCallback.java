@@ -24,6 +24,7 @@ public interface SearchClassCallback {
 
   int SCOPE_PLATFORM = 1;
   int SCOPE_APPLICATION = 2;
+  int SCOPE_ALL = SCOPE_APPLICATION | SCOPE_PLATFORM;
 
   int match(Class<?> o, long pos);
 }
