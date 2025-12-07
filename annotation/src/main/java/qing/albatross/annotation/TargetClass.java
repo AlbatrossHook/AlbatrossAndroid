@@ -16,6 +16,7 @@
 package qing.albatross.annotation;
 
 import static qing.albatross.annotation.ExecutionOption.DEFAULT_OPTION;
+import static qing.albatross.annotation.ExecutionOption.DO_NOTHING;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -30,6 +31,7 @@ public @interface TargetClass {
   boolean pendingHook() default false;
   int hookerExec() default DEFAULT_OPTION;
   int targetExec() default DEFAULT_OPTION;
+  int targetClassExec() default DO_NOTHING;
   int hookerBackupExec() default DEFAULT_OPTION;
   boolean required() default true;
   boolean image() default true;

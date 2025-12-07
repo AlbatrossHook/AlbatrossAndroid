@@ -40,6 +40,18 @@ public class SafeToString {
     safeToStringClass.add(c);
   }
 
+  public static boolean isSafeToString(Class<?> c) {
+    if (CharSequence.class.isAssignableFrom(c)) {
+      String name = c.getName();
+      if (name.startsWith("android.") || name.startsWith("java.")) {
+        return true;
+      }
+    }
+    if (safeToStringClass == null)
+      return false;
+    return safeToStringClass.contains(c);
+  }
+
   /**
    * 安全地将对象转换为字符串，并限制长度
    */
