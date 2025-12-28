@@ -1,3 +1,7 @@
+version 3.4.0
+- Optimize the hooks for possible inline methods
+- Rpc parameters support byte arrays
+
 version 3.3.0
 - For reflection annotations, it is supported to specify the class and class name
 - Support hook and backup limited effective app versions
