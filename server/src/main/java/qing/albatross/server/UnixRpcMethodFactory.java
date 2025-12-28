@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package qing.albatross.server;
 
 import java.lang.reflect.Method;
@@ -78,6 +75,7 @@ public class UnixRpcMethodFactory {
   static final byte ARG_FLOAT = 8;
   static final byte ARG_DOUBLE = 9;
   static final byte ARG_CHAR = 10;
+  static final byte ARG_BYTES = 11;
 
 
   static {
@@ -91,6 +89,7 @@ public class UnixRpcMethodFactory {
     argsMap.put(float.class, ARG_FLOAT);
     argsMap.put(double.class, ARG_DOUBLE);
     argsMap.put(char.class, ARG_CHAR);
+    argsMap.put(byte[].class, ARG_BYTES);
   }
 
   public static Map<String, RpcMethod> parse(Class<?> cls) {
@@ -120,7 +119,6 @@ public class UnixRpcMethodFactory {
   }
 
   public static Map<String, RpcMethod> generateRpcMethods(Class<?> cls) {
-    Map<String, RpcMethod> methods = parse(cls);
-    return methods;
+    return parse(cls);
   }
 }
