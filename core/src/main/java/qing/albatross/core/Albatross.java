@@ -57,6 +57,7 @@ import qing.albatross.annotation.ConstructorBackup;
 import qing.albatross.annotation.ConstructorHook;
 import qing.albatross.annotation.ConstructorHookBackup;
 import qing.albatross.annotation.DefOption;
+import qing.albatross.annotation.ExecutionOption;
 import qing.albatross.annotation.FieldRef;
 import qing.albatross.annotation.FuzzyMatch;
 import qing.albatross.annotation.MethodBackup;
@@ -105,6 +106,7 @@ import qing.albatross.reflection.DoubleFieldDef;
 import qing.albatross.reflection.FieldDef;
 import qing.albatross.reflection.FloatFieldDef;
 import qing.albatross.reflection.IntFieldDef;
+import qing.albatross.reflection.IntMethodDef;
 import qing.albatross.reflection.LongFieldDef;
 import qing.albatross.reflection.MethodDef;
 import qing.albatross.reflection.ReflectUtils;
@@ -118,6 +120,7 @@ import qing.albatross.reflection.StaticFieldDef;
 import qing.albatross.reflection.StaticFloatFieldDef;
 import qing.albatross.reflection.StaticIntConstFieldDef;
 import qing.albatross.reflection.StaticIntFieldDef;
+import qing.albatross.reflection.StaticIntMethodDef;
 import qing.albatross.reflection.StaticLongFieldDef;
 import qing.albatross.reflection.StaticMethodDef;
 import qing.albatross.reflection.StaticShortFieldDef;
@@ -377,6 +380,27 @@ public final class Albatross {
     return 0;
   }
 
+  public static void preventMethodInlining(Member target) {
+    int modifier = target.getModifiers();
+    boolean aPrivate = Modifier.isPrivate(modifier);
+    if (aPrivate || (!(target.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader))) {
+      searchMethodCallerFromClass(target, target.getDeclaringClass(), (m, i) -> {
+        addDecompileMethod(m, target, 0);
+        return true;
+      }, true);
+    } else if (Modifier.isFinal(modifier) || Modifier.isStatic(modifier)) {
+      searchMethodCaller(target, (m, i) -> {
+        addDecompileMethod(m, target, 0);
+        return true;
+      }, true, SearchClassCallback.SCOPE_APPLICATION);
+    } else {
+      searchMethodCallerFromClass(target, target.getDeclaringClass(), (m, i) -> {
+        addDecompileMethod(m, target, 0);
+        return true;
+      }, true);
+    }
+  }
+
   @Alias("backupAndHook")
   public static boolean backupAndHook(Member target, Method hook, Method backup, boolean check, boolean checkReturn, Set<Class<?>> dependencies, int targetExecMode, int hookerExecMode) throws AlbatrossException {
     if (initStatus > STATUS_INIT_OK)
@@ -418,29 +442,7 @@ public final class Albatross {
       if (inline_max_code_units > 0) {
         int methodCodeSize = getMethodCodeSize(target);
         if (methodCodeSize != 0 && methodCodeSize < inline_max_code_units) {
-          int modifier = target.getModifiers();
-          boolean aPrivate = Modifier.isPrivate(modifier);
-          if (aPrivate || (!(target.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader))) {
-            searchMethodCallerFromClass(target, target.getDeclaringClass(), (m, i) -> {
-              Albatross.log("try decompile:" + methodToString(m) + " for " + methodToString(target));
-              toDecompileMethod.add(m);
-              return true;
-            }, true);
-            return true;
-          }
-          if (Modifier.isFinal(modifier) || Modifier.isStatic(modifier)) {
-            searchMethodCaller(target, (m, i) -> {
-              Albatross.log("try decompile:" + methodToString(m) + " for " + methodToString(target));
-              toDecompileMethod.add(m);
-              return true;
-            }, true, SearchClassCallback.SCOPE_APPLICATION);
-          } else {
-            searchMethodCallerFromClass(target, target.getDeclaringClass(), (m, i) -> {
-              Albatross.log("try decompile:" + methodToString(m) + " for " + methodToString(target));
-              toDecompileMethod.add(m);
-              return true;
-            }, true);
-          }
+          preventMethodInlining(target);
         }
       }
       return true;
@@ -451,6 +453,35 @@ public final class Albatross {
     log("already hook " + target + " with " + hook);
     return false;
   }
+
+  public static void addDecompileMethod(Member m, Member target, int depth) {
+    if (!toDecompileMethod.contains(m)) {
+      if (depth == 0)
+        Albatross.log("try decompile:" + methodToString(m) + " for " + methodToString(target));
+      else
+        Albatross.log("[" + depth + "] decompile:" + methodToString(m));
+      toDecompileMethod.add(m);
+      if (depth > 5)
+        return;
+      int methodCodeSize = getMethodCodeSize(m);
+      if (methodCodeSize < inline_max_code_units) {
+        int modifier = m.getModifiers();
+        boolean aPrivate = Modifier.isPrivate(modifier);
+        if (aPrivate || (!(m.getDeclaringClass().getClassLoader() instanceof BaseDexClassLoader)) || (!Modifier.isStatic(modifier))) {
+          searchMethodCallerFromClass(m, m.getDeclaringClass(), (sub, i) -> {
+            addDecompileMethod(sub, target, depth + 1);
+            return true;
+          }, true);
+          return;
+        }
+        searchMethodCaller(m, (sub, i) -> {
+          addDecompileMethod(sub, target, depth + 1);
+          return true;
+        }, true, SearchClassCallback.SCOPE_APPLICATION);
+      }
+    }
+  }
+
 
   public static boolean backup(Member target, Method backup) throws AlbatrossException {
     return backup(target, backup, true, true, null, DO_NOTHING, CURRENT);
@@ -567,7 +598,7 @@ public final class Albatross {
 
 
   public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener, int compile) {
-    if(listener.listenerId!=0)
+    if (listener.listenerId != 0)
       return false;
     if (Modifier.isStatic(member.getModifiers())) {
       ensureClassInitialized(member.getDeclaringClass());
@@ -579,6 +610,12 @@ public final class Albatross {
         compileClass(listener.getClass(), compile);
       }
       listener.member = member;
+      int codeSize = getMethodCodeSize(member);
+      if (codeSize < inline_max_code_units && codeSize > 0) {
+        transactionBegin();
+        preventMethodInlining(member);
+        transactionEnd(true);
+      }
       return true;
     }
     return false;
@@ -626,7 +663,7 @@ public final class Albatross {
   public static native long entryPointAddress(Member member);
 
   public static int compileClass(Class<?> clazz, int compileOption) {
-    if (containsFlags(FLAG_NO_COMPILE))
+    if (compileOption != ExecutionOption.DECOMPILE && containsFlags(FLAG_NO_COMPILE))
       return 0;
     return compileClassNative(clazz, compileOption);
   }
@@ -2790,6 +2827,8 @@ public final class Albatross {
       putFieldClass(StaticMethodDef.class, true, null);
       putFieldClass(VoidMethodDef.class, true, void.class);
       putFieldClass(BooleanMethodDef.class, true, boolean.class);
+      putFieldClass(IntMethodDef.class, true, int.class);
+      putFieldClass(StaticIntMethodDef.class, true, int.class);
       putFieldClass(StaticVoidMethodDef.class, true, void.class);
     } catch (Exception e) {
       Albatross.log("initField", e);

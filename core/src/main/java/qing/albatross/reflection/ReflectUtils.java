@@ -19,6 +19,7 @@ import android.util.ArrayMap;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Map;
@@ -161,14 +162,25 @@ public class ReflectUtils {
     throw new NoSuchMethodException("Method " + name + " with subType parameters " + Arrays.asList(subArgTypes) + " not found in " + clazz);
   }
 
-  public static Method findDeclaredMethodWithCount(Class<?> clazz, String name, int expectParamCount) throws NoSuchMethodException {
-    Method[] methods = clazz.getDeclaredMethods();
-    for (Method method : methods) {
-      if (method.getName().equals(name) && method.getParameterCount() == expectParamCount) {
-        return method;
+  public static Member findDeclaredMethodWithCount(Class<?> clazz, String name, int expectParamCount) throws NoSuchMethodException {
+    if (!"$init".equals(name)) {
+      Method[] methods = clazz.getDeclaredMethods();
+      for (Method method : methods) {
+        if (method.getName().equals(name) && method.getParameterCount() == expectParamCount) {
+          return method;
+        }
       }
+      throw new NoSuchMethodException("Method " + name + " not found in " + clazz);
+    } else {
+      Constructor<?>[] methods = clazz.getDeclaredConstructors();
+      for (Constructor<?> method : methods) {
+        if (method.getParameterTypes().length == expectParamCount) {
+          return method;
+        }
+      }
+      throw new NoSuchMethodException("Constructor not found in " + clazz);
     }
-    throw new NoSuchMethodException("Method " + name + " not found in " + clazz);
+
   }
 
 
