@@ -28,6 +28,7 @@ Albatross 遵循以下设计目标：
 - **批量操作**：基于事务的Hook，自动解决依赖关系
 - **零反射设计**：直接调用方法和访问字段，无反射开销,调用没有额外开销。
 - **延迟Hook**：不用考虑类加载时机,对于加壳的app非常有用。
+- **Native Hook**：Hook native（C/C++）库中的函数（`qing.albatross.nativehook`，3.6.0新增）。
 - **功能强大**：既可用作Hook库，也可以作为反射替代方案（零反射开销)。
 - **易于开发**：构建镜像类和自动推导简化了复杂的Hook逻辑
 
@@ -35,7 +36,7 @@ Albatross 遵循以下设计目标：
 - **安卓版本**：
   - 全面支持：API 26-36（8.0-16）
   - 指令Hook：API 24-36（7.0-16）
-  - 字段访问：API 24-36（8.0-16），8.0以下因Dex优化限制，字段访问被禁用。
+  - 字段访问：API 26-36（8.0-16），8.0以下因Dex优化限制，字段访问被禁用。
   - 方法Hook：API 24-36（7.0-16）
   - ❌ 不支持：API 23 及以下（6.0 Marshmallow 及更早版本）
   - 集成: 需要保证目标应用进程没有Lsposed环境,使用frida注入需要清除掉frida的java环境
@@ -194,8 +195,8 @@ public static class ActivityThreadH {
   @StaticMethodBackup
   public static native Application currentApplication();
 
-  //该方法仅仅是为了推导出ActivityClientRecord的正确类型，不会backup Method,所以标记MethodDefOption.NOTHING
-  @MethodBackup(option = MethodDefOption.NOTHING)
+  //该方法仅仅是为了推导出ActivityClientRecord的正确类型，不会backup Method,所以标记DefOption.NOTHING
+  @MethodBackup(option = DefOption.NOTHING)
   private native Activity performLaunchActivity(ActivityClientRecord r, Intent customIntent);
 
   //泛型的具体类型无法动态获取，所以需要通过上面的方法去推断出类型和依赖
@@ -277,23 +278,27 @@ public static void test() throws AlbatrossErr {
   public void instruction(View view) throws NoSuchMethodException {
     if (listener == null) {
       Method getCaller = AlbatrossDemoMainActivity.class.getDeclaredMethod("getCaller", View.class);
-      listener = Albatross.hookInstruction(getCaller, 0, 10, (method, self, dexPc, invocationContext) -> {
-        assert dexPc <= 10;
-        assert dexPc >= 0;
-        assert method == getCaller;
-        assert self == AlbatrossDemoMainActivity.this;
-        assert invocationContext.NumberOfVRegs() == 7;
-        Albatross.log("onEnter:" + dexPc);
-        Object receiver = invocationContext.GetParamReference(0);
-        assert receiver == self;
-        Object v = invocationContext.GetParamReference(1);
-        assert (v instanceof View);
-        if (dexPc == 4) {
+      listener = new InstructionListener() {
+        @Override
+        public void onEnter(Member method, Object self, int dexPc, InvocationContext invocationContext) {
+          assert dexPc <= 10;
+          assert dexPc >= 0;
+          assert method == getCaller;
+          assert self == AlbatrossDemoMainActivity.this;
+          assert invocationContext.numberOfVRegs() == 7;
+          Albatross.log("onEnter:" + dexPc);
+          Object receiver = invocationContext.getParamObject(0, Object.class);
+          assert receiver == self;
+          Object v = invocationContext.getParamObject(1, Object.class);
+          assert (v instanceof View);
+          if (dexPc == 4) {
 //          00003c44: 7100 b700 0000          0000: invoke-static       {}, Lqing/albatross/core/Albatross;->getCallerClass()Ljava/lang/Class; # method@00b7
 //          00003c4a: 0c00                    0003: move-result-object  v0
-          invocationContext.SetVRegReference(0, AlbatrossDemoMainActivity.class);
+            invocationContext.setVRegObject(0, AlbatrossDemoMainActivity.class);
+          }
         }
-      });
+      };
+      assert Albatross.hookInstruction(getCaller, 0, 10, listener);
     } else {
       listener.unHook();
       listener = null;
@@ -303,11 +308,37 @@ public static void test() throws AlbatrossErr {
 
 ```
 
+### 6. Native Hook（v3.6.0+）
+
+使用新增的 `qing.albatross.nativehook` 包Hook native（C/C++）库中的函数：
+
+```java
+// 通过注解Hook native函数
+@TargetLibrary("log")
+public class LiblogH {
+  @Symbol("__android_log_print")
+  static long logPrint;
+
+  @FuncBackup("__android_log_print")
+  private static native int logPrintBackup(int prio, String tag, String msg);
+}
+
+AlbNative.hookNative(LiblogH.class, "log");
+
+// 或者直接打开动态库查找符号
+DlInfo lib = AlbNative.openLib("libc.so");
+if (lib != null) {
+  long mallocAddr = lib.getSymbolAddress("malloc");
+  lib.close();
+}
+```
+
 ## 应用场景
 - **热修复**：在运行时替换有缺陷的方法
 - **监控**：拦截方法调用以进行日志记录或分析
 - **插件系统**：动态加载和修改行为
 - **BinderHook**：非常适合多开软件的开发。
+- **Native Hook**：函数级Hook系统或第三方native库（如libc）。
 - **反射**：高性能反射库替代方案
 - **代码分析**：通过指令跟踪和分析运行逻辑
 

@@ -14,16 +14,20 @@ AlbatrossException
 │   ├── RequiredErr (必需元素未找到)
 │   │   ├── RequiredFieldErr
 │   │   ├── RequiredMethodErr
-│   │   │── RequiredClassErr
-│   │   └── RequiredInstanceErr
-│   └── HookerStructErr (Hooker结构违规)
-│       ├── RedundantFieldErr
-│       ├── FindRedundantMethodErr
-│       ├── VirtualCallBackupErr
-│       └── NotNativeBackupErr
-|      
+│   │   ├── RequiredClassErr
+│   │   ├── RequiredInstanceErr
+│   │   └── RequiredThisErr
+│   ├── HookerStructErr (Hooker结构违规)
+│   │   ├── RedundantFieldErr
+│   │   ├── RedundantMethodErr
+│   │   ├── RepetitiveBackupErr
+│   │   ├── MirrorExtendErr
+│   │   ├── VirtualCallBackupErr
+│   │   └── NotNativeBackupErr
+│   └── HookInterfaceErr (目标类是接口)
 ├── MethodException (方法签名问题)
-└── FieldException (字段验证错误)
+├── FieldException (字段验证错误)
+└── FindMethodException (参数类型解析不明确)
 ```
 ---
 
@@ -49,6 +53,9 @@ AlbatrossException
 | `RequiredMethodErr`   | 必需方法未找到 |
 | `RequiredClassErr`    | 目标类未找到    |
 | `RequiredInstanceErr` | 未传递实例对象 |
+| `RequiredThisErr`     | 目标方法非静态，但Hook方法没有`this`参数 |
+
+> **`RequiredThisErr`**：目标方法为实例方法，但Hook方法未声明目标实例（`this`）参数时抛出。将实例作为Hook方法的第一个参数即可解决。
 
 **示例**：
 ```java
@@ -65,7 +72,9 @@ public class BadHooker {}
 
 #### 子类：
 - `RedundantFieldErr` - 未使用的实例字段
-- `FindRedundantMethodErr` - 未使用的实例方法
+- `RedundantMethodErr` - 未使用的实例方法
+- `RepetitiveBackupErr` - 同一方法被重复备份
+- `MirrorExtendErr` - 镜像类继承了非Object类
 - `VirtualCallBackupErr` - 备份方法不是私有的
 - `NotNativeBackupErr` - 备份方法不是native的
 
@@ -97,12 +106,12 @@ public class BadHooker {}
 
 ---
 
-#### `FindRedundantMethodErr`
+#### `RedundantMethodErr`
 **当Hooker类包含未注解的实例方法时抛出**
 
 - **构造函数**：
   ```java
-  public FindRedundantMethodErr(Method method)
+  public RedundantMethodErr(Method method)
   ```
     - `method`: 冗余方法引用
 
@@ -110,7 +119,7 @@ public class BadHooker {}
   ```java
   @TargetClass(Activity.class)
   public class ActivityHooker {
-      // 实例方法 → FindRedundantMethodErr
+      // 实例方法 → RedundantMethodErr
       public void unusedMethod() {}
   }
   ```
@@ -178,6 +187,34 @@ public class BadHooker {}
 
 ---
 
+#### `RepetitiveBackupErr`
+**当同一方法被重复备份时抛出**
+
+- **构造函数**：
+  ```java
+  public RepetitiveBackupErr(Method method)
+  ```
+    - `method`: 被重复备份的方法
+
+- **修复**：
+    - 每个方法只能备份一次；删除Hooker中重复的备份方法。
+
+---
+
+#### `MirrorExtendErr`
+**当镜像（Hooker）类继承了除`Object`以外的类时抛出**
+
+- **构造函数**：
+  ```java
+  public MirrorExtendErr(Class<?> hooker)
+  ```
+    - `hooker`: 非法的镜像类
+
+- **修复**：
+    - 让Hooker类直接继承`Object`（或省略`extends`子句）。
+
+---
+
 ### 4. `MethodException`
 **表示方法签名不匹配**
 
@@ -204,8 +241,22 @@ public class BadHooker {}
 
 | 原因               | 描述                              |
 |-------------------|-----------------------------------|
+| `FIELD_BAN`          | 目标字段被禁止备份（如配置了`FLAG_FIELD_BACKUP_BAN`）  |
 | `WRONG_STATIC_FIELD` | 字段间静态状态不匹配  |
 | `WRONG_TYPE`         | 字段间类型不匹配             |
+
+---
+
+### 6. `FindMethodException`
+**当`findMethod`期间参数类型无法明确解析时抛出**
+
+- **字段**：
+  - `argTypes` - 请求的参数类型（`Class<?>[]`）
+  - `subArgTypes` - 解析出的候选类型（`CheckParameterTypesResult`）
+
+- **场景**：
+    - 模糊匹配参数类型时存在多个可能匹配
+    - `CheckParameterTypesResult` 提供了匹配的子类型、Hooker类、基元匹配和偏移量等信息供进一步排查
 
 ---
 
@@ -288,10 +339,10 @@ public class StringHooker {
 | 错误类型           | 原因                                   | 修复                                                                     |
 |-------------------|----------------------------------------|-------------------------------------------------------------------------|
 | RedundantFieldErr    | 未注解的实例字段              | 删除或标记为static                                                |
-| Redundant Method     | 未注解的实例方法             | 删除或添加注解                                                |
+| RedundantMethodErr   | 未注解的实例方法             | 删除或添加注解                                                |
 | VirtualCallBackupErr | 非私有备份方法               | 添加private修饰符                                                    |
 | NotNativeBackupErr   | 非native备份方法                | 添加native修饰符                                                     |
-| Parameter Mismatch   | 与目标方法签名不匹配   | 匹配目标方法签名或使用@ParamInfo或@SubType注解 |
+| Parameter Mismatch   | 与目标方法签名不匹配   | 匹配目标方法签名或使用@ParamInfo或@FuzzyMatch注解 |
 | Return Type Mismatch | 返回类型与目标方法不匹配 | 调整返回类型声明                                          |
 | RequiredFieldErr     | 必需字段未找到                | 删除缺失字段或设置required=false                              |
 | RequiredMethodErr    | 必需方法未找到               | 删除缺失方法或设置required=false                             |

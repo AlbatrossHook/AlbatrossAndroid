@@ -13,16 +13,20 @@ AlbatrossException
 │   ├── RequiredErr (required element not found)
 │   │   ├── RequiredFieldErr
 │   │   ├── RequiredMethodErr
-│   │   │── RequiredClassErr
-│   │   └── RequiredInstanceErr
-│   └── HookerStructErr (hooker structure violations)
-│       ├── RedundantFieldErr
-│       ├── FindRedundantMethodErr
-│       ├── VirtualCallBackupErr
-│       └── NotNativeBackupErr
-|      
+│   │   ├── RequiredClassErr
+│   │   ├── RequiredInstanceErr
+│   │   └── RequiredThisErr
+│   ├── HookerStructErr (hooker structure violations)
+│   │   ├── RedundantFieldErr
+│   │   ├── RedundantMethodErr
+│   │   ├── RepetitiveBackupErr
+│   │   ├── MirrorExtendErr
+│   │   ├── VirtualCallBackupErr
+│   │   └── NotNativeBackupErr
+│   └── HookInterfaceErr (target class is an interface)
 ├── MethodException (method signature issues)
-└── FieldException (field validation errors)
+├── FieldException (field validation errors)
+└── FindMethodException (ambiguous parameter type resolution)
 ```
 ---
 
@@ -49,7 +53,10 @@ Only triggered when `required=true` in annotations.
 | `RequiredFieldErr`    | Required field not found  |
 | `RequiredMethodErr`   | Required method not found |
 | `RequiredClassErr`    | Target class not found    |
- | `RequiredInstanceErr` |  No instance object passed |
+| `RequiredInstanceErr` |  No instance object passed |
+| `RequiredThisErr`     | Target method is not static but the hook method has no `this` parameter |
+
+> **`RequiredThisErr`**: Thrown when the target method is an instance method but the hook method does not declare the target instance (`this`) parameter. Add the instance as the first parameter of the hook method to resolve it.
 
 **Example**:
 ```java
@@ -66,7 +73,9 @@ Indicates invalid hooker design patterns.
 
 #### Subclasses:
 - `RedundantFieldErr` - Unused instance field
-- `FindRedundantMethodErr` - Unused instance method
+- `RedundantMethodErr` - Unused instance method
+- `RepetitiveBackupErr` - Duplicate backup of the same method
+- `MirrorExtendErr` - Mirror class inherits a non-Object class
 - `VirtualCallBackupErr` - Backup method not private
 - `NotNativeBackupErr` - Backup method not native
 
@@ -100,12 +109,12 @@ Indicates invalid hooker design patterns.
 
 ---
 
-####  `FindRedundantMethodErr`
+####  `RedundantMethodErr`
 **Thrown when a hooker class contains unannotated instance methods**
 
 - **Constructor**:
   ```java
-  public FindRedundantMethodErr(Method method)
+  public RedundantMethodErr(Method method)
   ```
     - `method`: Redundant method reference
 
@@ -113,7 +122,7 @@ Indicates invalid hooker design patterns.
   ```java
   @TargetClass(Activity.class)
   public class ActivityHooker {
-      // Instance method → FindRedundantMethodErr
+      // Instance method → RedundantMethodErr
       public void unusedMethod() {}
   }
   ```
@@ -182,7 +191,35 @@ Indicates invalid hooker design patterns.
 
 ---
 
-### 5. `MethodException`
+#### `RepetitiveBackupErr`
+**Thrown when the same method is backed up more than once**
+
+- **Constructor**:
+  ```java
+  public RepetitiveBackupErr(Method method)
+  ```
+    - `method`: The method that is backed up repeatedly
+
+- **Fix**:
+    - Back up each method only once; remove duplicate backup methods from the hooker.
+
+---
+
+#### `MirrorExtendErr`
+**Thrown when a mirror (hooker) class inherits from a class other than `Object`**
+
+- **Constructor**:
+  ```java
+  public MirrorExtendErr(Class<?> hooker)
+  ```
+    - `hooker`: The invalid mirror class
+
+- **Fix**:
+    - Make the hooker class extend `Object` directly (or omit the `extends` clause).
+
+---
+
+### 4. `MethodException`
 **Indicates method signature mismatches**
 
 #### Error Codes (`MethodException`)
@@ -208,8 +245,22 @@ Indicates invalid hooker design patterns.
 
 | Reason               | Description                              |
 |----------------------|------------------------------------------|
+| `FIELD_BAN`          | The target field is banned from backup (e.g. `FLAG_FIELD_BACKUP_BAN` configured) |
 | `WRONG_STATIC_FIELD` | Mismatched static status between fields  |
 | `WRONG_TYPE`         | Type mismatch between fields             |
+
+---
+
+### 6. `FindMethodException`
+**Thrown when parameter types cannot be resolved unambiguously during `findMethod`**
+
+- **Fields**:
+  - `argTypes` - The requested argument types (`Class<?>[]`)
+  - `subArgTypes` - The resolved candidate types (`CheckParameterTypesResult`)
+
+- **Scenarios**:
+    - Multiple possible matches when fuzzy-matching parameter types
+    - `CheckParameterTypesResult` provides the matched subtypes, hooker classes, primitive matches and offsets for further inspection
 
 ---
 
@@ -293,10 +344,10 @@ public class StringHooker {
 | Error Type           | Cause                                   | Fix                                                                     |
 |----------------------|-----------------------------------------|-------------------------------------------------------------------------|
 | RedundantFieldErr    | Unannotated instance field              | Remove or mark as static                                                |
-| Redundant Method     | Unannotated instance method             | Remove or add annotation                                                |
+| RedundantMethodErr   | Unannotated instance method             | Remove or add annotation                                                |
 | VirtualCallBackupErr | Non-private backup method               | Add private modifier                                                    |
 | NotNativeBackupErr   | Non-native backup method                | Add native modifier                                                     |
-| Parameter Mismatch   | Signature mismatch with target method   | Match target method signature or use @ParamInfo or @SubType annotations |
+| Parameter Mismatch   | Signature mismatch with target method   | Match target method signature or use @ParamInfo or @FuzzyMatch annotations |
 | Return Type Mismatch | Return type doesn't match target method | Adjust return type declaration                                          |
 | RequiredFieldErr     | Required field not found                | Remove missing field or set required=false                              |
 | RequiredMethodErr    | Required method not found               | Remove missing method or set required=false                             |

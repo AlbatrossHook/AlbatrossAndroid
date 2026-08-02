@@ -11,9 +11,10 @@
 5. [字段操作](#字段操作)
 6. [事务管理](#事务管理)
 7. [指令Hook](#指令hook)
-8. [工具方法](#工具方法)
-9. [动态库操作](#动态库操作)
-10. [使用示例](#使用示例)
+8. [方法调用Hook](#方法调用hook)
+9. [工具方法](#工具方法)
+10. [Native Hook](#native-hook)
+11. [使用示例](#使用示例)
 
 ---
 
@@ -48,6 +49,8 @@ public static final int FLAG_DISABLE_LOG = 0x400;        // 禁用日志
 public static final int FLAG_INJECT = 0x800;             // 注入模式
 public static final int FLAG_INIT_RPC = 0x1000;          // 初始化RPC
 public static final int FLAG_CALL_CHAIN = 0x2000;        // 调用链模式
+public static final int FLAG_ANTI_DETECTION = 0x4000;     // 反检测
+public static final int FLAG_INTERPRETER = 0x8000;        // 解释器模式（禁用编译，强制解释执行）
 ```
 
 ### 状态常量
@@ -143,6 +146,7 @@ public static boolean replace(Member target, Method hook) throws AlbatrossExcept
 
 ### `hookClass`
 ```java
+public static int hookClass() throws AlbatrossErr;                                    // 以调用者类为Hooker
 public static int hookClass(Class<?> hooker) throws AlbatrossErr;
 public static int hookClass(Class<?> hooker, Class<?> defaultClass) throws AlbatrossErr;
 public static int hookObject(Class<?> hooker, Object instance) throws AlbatrossErr;
@@ -154,7 +158,15 @@ public static int hookClass(Class<?> hooker, ClassLoader loader, Class<?> defaul
 - `defaultClass`: 默认目标类
 - `loader`: 类加载器
 - `instance`: 目标实例  
-**返回**: 成功Hook的数量
+**返回**: 成功Hook的数量（失败时返回 `REDUNDANT_ELEMENT`）
+
+### `unhookClass` / `unhookMethod`
+```java
+public static int unhookClass(Class<?> hooker) throws AlbatrossErr;
+public static int unhookClass(Class<?> hooker, Class<?> targetClass);
+public static boolean unhookMethod(Member target, Method hook, Method backup);
+```
+**功能**: 撤销类或方法的Hook
 
 ### `convert`
 ```java
@@ -200,6 +212,24 @@ public static void setExecConfiguration(int targetExecMode, int hookerExecMode, 
 - `targetExecMode`: 目标方法执行模式
 - `hookerExecMode`: Hooker方法执行模式
 - `hookerBackupExec`: Hooker备份方法执行模式
+
+### `compileClassByAnnotation` / `setInlineMaxCodeUnits` / `getMethodCodeSize` / `getMethodHookCount`
+```java
+public static int compileClassByAnnotation(Class<?> clazz, int compileOption);
+public static void setInlineMaxCodeUnits(int n);
+public static native int getMethodCodeSize(Member method);
+public static native int getMethodHookCount(Member method);
+```
+**功能**: 按注解编译类、设置内联上限、查询方法代码大小/Hook数量
+
+### `decompileAll` / `decompileMethod` / `addDecompileMethod` / `preventMethodInlining`
+```java
+public static native void decompileAll();                                    // 反编译所有方法
+public static native boolean decompileMethod(Member method, boolean allowInline);
+public static boolean addDecompileMethod(Member target, Member hook, int dexPc);
+public static boolean preventMethodInlining(Member method);
+```
+**功能**: 反编译与防止内联
 
 ### `disableCompileBackupCall`
 ```java
@@ -263,18 +293,39 @@ public static synchronized native int transactionLevel();
 
 ### `hookInstruction`
 ```java
-public static InstructionListener hookInstruction(Member member, int dexPc, InstructionCallback callback);
-public static InstructionListener hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionCallback callback);
-public static InstructionListener hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionCallback callback, int compile);
+public static boolean hookInstruction(Member member, int dexPc, InstructionListener listener);
+public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener);
+public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener, int compile);
 ```
-**功能**: Hook方法指令执行  
+**功能**: Hook方法指令执行，指令进入监听范围时触发回调  
 **参数**:
 - `member`: 目标方法
-- `dexPc`: DEX程序计数器位置
 - `minDexPc`/`maxDexPc`: DEX PC范围
-- `callback`: 指令回调
+- `listener`: `InstructionListener` 指令回调（`onEnter`/`onReturn`，可通过 `invocationContext` 读写寄存器）
 - `compile`: 编译选项  
-**返回**: `InstructionListener` 实例，用于取消Hook
+**返回**: `true` 如果Hook成功  
+**说明**: 首次调用时会自动初始化指令Hook（`insHookInit`）。取消Hook调用 `listener.unHook()`
+
+### `insHookInit`
+```java
+public static void insHookInit();
+```
+**功能**: 手动初始化指令Hook（一般无需调用，`hookInstruction` 会自动初始化）
+
+---
+
+## 方法调用Hook
+
+### `hookMethod`
+```java
+public static MethodCallHook hookMethod(Member member, MethodCallback callback, int compile);
+```
+**功能**: 方法调用级Hook——每次目标方法被调用时回调，无需声明Hooker类  
+**参数**:
+- `member`: 目标方法
+- `callback`: `MethodCallback` 回调（`Object call(CallFrame)`）
+- `compile`: 编译选项  
+**返回**: `MethodCallHook` 实例，可调用 `unHook()` 取消
 
 ---
 
@@ -303,6 +354,24 @@ public static native boolean isHooked(Class<?> clz);
 public static native Application currentApplication();
 ```
 **功能**: 获取当前Application上下文
+
+### `currentPackageName` / `currentProcessName` / `methodToString`
+```java
+public static native String currentPackageName();
+public static native String currentProcessName();
+public static native String methodToString(Member member);
+```
+**功能**: 获取当前包名/进程名，方法转字符串
+
+### `currentInstrumentation` / `getMainHandler` / `getProfileFilePath` / `getThreadTid` / `getTid`
+```java
+public static Instrumentation currentInstrumentation();
+public static Handler getMainHandler();
+public static String getProfileFilePath();
+public static native int getThreadTid(Thread thread);
+public static native int getTid();
+```
+**功能**: 环境与线程信息（前三个经由内部 `ActivityThreadH` 镜像实现）
 
 ### `getCallerClass`
 ```java
@@ -334,6 +403,29 @@ public static native Method findMethod(Class<?> clz, Class<?>[] argTypes, int is
 public static native Method[] getDeclaredMethods(Class<?> clz, int isStatic);
 ```
 **功能**: 获取声明的方法
+
+### `searchMethodCaller` / `searchField` / `searchObject` 等搜索API
+```java
+public static int searchMethodCaller(Member method, SearchCallback<Member> callback, boolean pickFirst, int searchScope);
+public static int searchMethodCaller(Class<?> clz, Member callee, SearchCallback<Member> callback, boolean pickFirst);
+public static int searchMethodCallerFromClass(Member method, Class<?> clz, SearchCallback<Member> callback, boolean pickFirst);
+public static int searchField(Field field, int operation, FieldCallback callback, boolean pickFirst, boolean searchPlatform);
+public static int searchFieldClassRef(Field field, Class<?> clz, int operation, FieldCallback callback);
+public static <T> int searchObject(Class<T> clz, SearchCallback<T> callback);
+public static <T> List<T> searchObjects(Class<T> clz);
+public static void searchBootClass(SearchClassCallback callback);
+public static void searchApplicationClass(SearchClassCallback callback);
+public static void searchClass(SearchClassCallback callback, int scope);
+```
+**功能**: 在堆/类加载器中搜索方法调用者、字段引用与对象实例
+
+### `registerAlbNative` / `registerOceanTracker` / `drmSet`
+```java
+public static native boolean registerAlbNative(Class<?> AlbNative, Method m, Method enter, Method leave);
+public static native boolean registerOceanTracker(Class<?> ocean);
+public static synchronized native boolean drmSet(byte[] value);
+```
+**功能**: 注册native Hook回调（`AlbNative` 静态块自动调用）、ocean跟踪器、DRM设置
 
 ### `getRuntimeISA`
 ```java
@@ -369,24 +461,75 @@ public synchronized static void disableLog();
 
 ---
 
-## 动态库操作
+## Native Hook
 
-### `openLib`
-```java
-public static DlInfo openLib(String libName);
-```
-**功能**: 打开动态库  
-**参数**:
-- `libName`: 库名称  
-**返回**: `DlInfo` 实例，用于符号查找
+`qing.albatross.nativehook` 包提供了 native（C/C++）库Hook能力。
 
-### `DlInfo` 类
+### `AlbNative`
 ```java
-public static class DlInfo {
-    public long getSymbolAddress(String symbol);  // 获取符号地址
-    public void close();                          // 关闭库句柄
+public class AlbNative {
+  public static void watchFunc(String symbol, long func);                                    // 监控函数调用
+  public static void hookInit(String logPath);                                               // 初始化native hook日志
+  public static boolean dumpNativeMethod(String outputPath);                                 // 导出native方法信息
+  public static void registerLibraryCallback(SearchCallback callback, String libName);       // 注册库加载回调
+  public static void enumerateModules(SearchCallback callback);                              // 枚举已加载的so库
+  public static DlInfo openLib(String libName);                                              // 打开动态库（dlopen）
+  public static HookRecord hookInstruction(String lib, String function, InstructionCallback onEnter,
+                                           InstructionCallback onLeave, Object userdata);   // 指令级Hook
+  public static HookRecord hookInstruction(long symbolAddress, InstructionCallback onEnter,
+                                           InstructionCallback onLeave, Object userdata);
+  public static int hookNative();                                                           // 按注解Hook native函数
+  public static int hookNative(Class<?> hooker, String lib);
 }
 ```
+**功能**: native Hook入口。`hookNative` 会根据 `@TargetLibrary`（加载so）、`@Symbol`（解析符号地址）和 `@FuncBackup`（备份native函数）注解自动完成Hook。
+
+### `DlInfo`
+```java
+public class DlInfo {
+  public long enumerateFunctions(SearchCallback callback);   // 枚举库内函数
+  public long getSymbolAddress(String symbol);               // 获取符号地址
+  public void close();                                       // 关闭库句柄
+  public void backup(long address, Method method);           // 备份native函数（占位）
+}
+```
+
+### `Address`
+```java
+public class Address {
+  public static Address malloc(int size, boolean clear);     // 分配内存
+  public void clear();                                      // 清零
+  public void delete();                                     // 释放（free）
+  public long getAddress();
+  public long getSize();
+  public String readString(int maxLen);                     // 读取字符串
+  public boolean writeString(String str);                   // 写入字符串
+}
+```
+
+### `NativeInvokeContext`
+native指令Hook回调中读写参数/返回值：
+```java
+public class NativeInvokeContext {
+  public boolean isJavaThread();
+  public long getNthArgument(int nth);
+  public <T> T getNthArgument(int nth, Class<T> clazz);   // 读对象参数
+  public void setNthArgument(int nth, long value);
+  public void setResult(long value);
+  public long getResult();
+}
+```
+
+### `NativeMethodParser` / `NativeMethodRecord`
+解析native方法签名（`ART`寄存器/参数类型），`NativeMethodRecord(byte[] args, byte retType)` 保存解析结果。32位机上`long`默认按单字处理，可用`@Word64`标记为64位。
+
+### `Libc`
+libc 常用函数（`open`、`read`、`write`、`close`、`malloc`、`free` 等）的封装，可直接调用。
+
+### `SearchCallback` / `InstructionCallback` / `HookRecord`
+- `SearchCallback`：`boolean match(String symbol, long addr, long size, int idx)` 搜索回调
+- `InstructionCallback`：`void onCall(NativeInvokeContext ctx, Object userdata)` 指令回调
+- `HookRecord`：`unHook()` 取消native指令Hook
 
 ---
 
@@ -410,18 +553,20 @@ Albatross.hookClass(ActivityHooker.class);
 ### 示例2: 指令Hook
 ```java
 Method targetMethod = MyClass.class.getDeclaredMethod("targetMethod");
-InstructionListener listener = Albatross.hookInstruction(targetMethod, 0, 10, 
-    (method, self, dexPc, invocationContext) -> {
+boolean ok = Albatross.hookInstruction(targetMethod, 0, 10, new InstructionListener() {
+    @Override
+    public void onEnter(int dexPc, InvocationContext invocationContext) {
         Log.d("Albatross", "Instruction at dexPc: " + dexPc);
-    });
+    }
+});
 ```
 
 ### 示例3: 事务Hook
 ```java
 Albatross.transactionBegin();
 Albatross.setExecConfiguration(
-    ExecOption.JIT_OPTIMIZED, 
-    ExecOption.JIT_OPTIMIZED
+    ExecutionOption.JIT_OPTIMIZED,
+    ExecutionOption.JIT_OPTIMIZED
 );
 Albatross.hookClass(MyHooker.class);
 Albatross.transactionEnd(true);
@@ -445,14 +590,26 @@ public class TargetHooker {
 }
 ```
 
-### 示例5: 动态库操作
+### 示例5: Native Hook
 ```java
-DlInfo lib = Albatross.openLib("libc.so");
+// 打开动态库并查找符号
+DlInfo lib = AlbNative.openLib("libc.so");
 if (lib != null) {
     long mallocAddr = lib.getSymbolAddress("malloc");
     Log.d("Albatross", "malloc address: 0x" + Long.toHexString(mallocAddr));
     lib.close();
 }
+
+// 按注解Hook native函数
+@TargetLibrary("log")
+class LiblogH {
+    @Symbol("__android_log_print")
+    static long logPrint;
+
+    @FuncBackup("__android_log_print")
+    private static native int logPrintBackup(int prio, String tag, String msg);
+}
+AlbNative.hookNative(LiblogH.class, "log");
 ```
 
 ---

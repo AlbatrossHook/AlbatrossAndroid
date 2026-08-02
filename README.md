@@ -31,6 +31,7 @@ Albatross adheres to the following design goals:
 - **Batch Operations**: Transaction-based hooking with automatic dependency resolution
 - **Zero-Reflection Design**: Direct method invocation and field access without reflection overhead
 - **Pending Hooks**: Automatically hooks classes when new DEX load.
+- **Native Hook**: Hook C/C++ functions in native libraries (`qing.albatross.nativehook`, new in 3.6.0).
 - **Multi-Use**: Functions as both hooking library and high-performance reflection alternative.
 - **Easy Deployment**: Mirror-class  simplifies complex hooking logic
 
@@ -178,8 +179,8 @@ public static class ActivityThreadH {
   @StaticMethodBackup
   public static native Application currentApplication();
 
-  //该方法仅仅是为了推导出ActivityClientRecord的正确类型，不会backup Method,所以标记MethodDefOption.NOTHING
-  @MethodBackup(option = MethodDefOption.NOTHING)
+  //该方法仅仅是为了推导出ActivityClientRecord的正确类型，不会backup Method,所以标记DefOption.NOTHING
+  @MethodBackup(option = DefOption.NOTHING)
   private native Activity performLaunchActivity(ActivityClientRecord r, Intent customIntent);
 
   //泛型的具体类型无法动态获取，所以需要通过上面的方法去推断出类型和依赖
@@ -261,23 +262,27 @@ public static void test() throws AlbatrossErr {
   public void instruction(View view) throws NoSuchMethodException {
     if (listener == null) {
       Method getCaller = AlbatrossDemoMainActivity.class.getDeclaredMethod("getCaller", View.class);
-      listener = Albatross.hookInstruction(getCaller, 0, 10, (method, self, dexPc, invocationContext) -> {
-        assert dexPc <= 10;
-        assert dexPc >= 0;
-        assert method == getCaller;
-        assert self == AlbatrossDemoMainActivity.this;
-        assert invocationContext.NumberOfVRegs() == 7;
-        Albatross.log("onEnter:" + dexPc);
-        Object receiver = invocationContext.GetParamReference(0);
-        assert receiver == self;
-        Object v = invocationContext.GetParamReference(1);
-        assert (v instanceof View);
-        if (dexPc == 4) {
+      listener = new InstructionListener() {
+        @Override
+        public void onEnter(Member method, Object self, int dexPc, InvocationContext invocationContext) {
+          assert dexPc <= 10;
+          assert dexPc >= 0;
+          assert method == getCaller;
+          assert self == AlbatrossDemoMainActivity.this;
+          assert invocationContext.numberOfVRegs() == 7;
+          Albatross.log("onEnter:" + dexPc);
+          Object receiver = invocationContext.getParamObject(0, Object.class);
+          assert receiver == self;
+          Object v = invocationContext.getParamObject(1, Object.class);
+          assert (v instanceof View);
+          if (dexPc == 4) {
 //          00003c44: 7100 b700 0000          0000: invoke-static       {}, Lqing/albatross/core/Albatross;->getCallerClass()Ljava/lang/Class; # method@00b7
 //          00003c4a: 0c00                    0003: move-result-object  v0
-          invocationContext.SetVRegReference(0, AlbatrossDemoMainActivity.class);
+            invocationContext.setVRegObject(0, AlbatrossDemoMainActivity.class);
+          }
         }
-      });
+      };
+      assert Albatross.hookInstruction(getCaller, 0, 10, listener);
     } else {
       listener.unHook();
       listener = null;
@@ -287,6 +292,31 @@ public static void test() throws AlbatrossErr {
 
 ```
 
+### 6. Native Hook (v3.6.0+)
+
+Hook C/C++ functions in native libraries with the new `qing.albatross.nativehook` package:
+
+```java
+// Hook a native function by annotations
+@TargetLibrary("log")
+public class LiblogH {
+  @Symbol("__android_log_print")
+  static long logPrint;
+
+  @FuncBackup("__android_log_print")
+  private static native int logPrintBackup(int prio, String tag, String msg);
+}
+
+AlbNative.hookNative(LiblogH.class, "log");
+
+// Or open a library and look up symbols directly
+DlInfo lib = AlbNative.openLib("libc.so");
+if (lib != null) {
+  long mallocAddr = lib.getSymbolAddress("malloc");
+  lib.close();
+}
+```
+
 ## Use Cases
 - **Hotfixes**: Replace buggy methods at runtime
 - **Monitoring**: Intercept method calls for logging or analytics
@@ -294,6 +324,7 @@ public static void test() throws AlbatrossErr {
 - **Security**: Modify or block dangerous operations
 - **SDK Interception**: Override or extend third-party SDK behavior
 - **Binder Hook**:Easy for Multi-Instance Software Development.
+- **Native Hook**:Hook system or third-party native libraries (e.g. libc) at the function level.
 - **Reflection**:High-performance reflection library alternatives
 - **Code analysis**:Tracking and analyzing the running logic through instructions
 

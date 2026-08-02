@@ -2,315 +2,382 @@
 
 ---
 
-## 目录
+## Table of Contents
 
-1. [常量](#常量)
-2. [初始化与配置](#初始化与配置)
-3. [Hook操作](#hook操作)
-4. [类与方法处理](#类与方法处理)
-5. [字段操作](#字段操作)
-6. [事务管理](#事务管理)
-7. [指令Hook](#指令hook)
-8. [方法调用Hook](#方法调用hook)
-9. [工具方法](#工具方法)
-10. [动态库操作](#动态库操作)
-11. [使用示例](#使用示例)
+1. [Constants](#constants)
+2. [Initialization & Configuration](#initialization--configuration)
+3. [Hook Operations](#hook-operations)
+4. [Class & Method Handling](#class--method-handling)
+5. [Field Operations](#field-operations)
+6. [Transaction Management](#transaction-management)
+7. [Instruction Hook](#instruction-hook)
+8. [Method-Call Hook](#method-call-hook)
+9. [Utility Methods](#utility-methods)
+10. [Native Hook](#native-hook)
+11. [Usage Examples](#usage-examples)
 
 ---
 
-## 常量
+## Constants
 
-### 架构标识符
+### Architecture Identifiers
 ```java
-public static final int kArm = 1;        // ARMv7架构
-public static final int kArm64 = 2;       // ARMv8/ARM64架构
-public static final int kX86 = 3;         // x86架构
-public static final int kX86_64 = 4;      // x86_64架构
+public static final int kArm = 1;        // ARMv7 architecture
+public static final int kArm64 = 2;       // ARMv8/ARM64 architecture
+public static final int kX86 = 3;         // x86 architecture
+public static final int kX86_64 = 4;      // x86_64 architecture
 ```
 
-### 字段标志
+### Field Flags
 ```java
-public static final int FLAG_FIELD_BACKUP_INSTANCE = 0x40;  // 启用实例字段备份
-public static final int FLAG_FIELD_BACKUP_STATIC = 0x80;    // 启用静态字段备份
-public static final int FLAG_FIELD_BACKUP_BAN = 0x100;      // 禁用字段备份
-public static final int FLAG_FIELD_DISABLED = 0x200;        // 字段功能禁用
+public static final int FLAG_FIELD_BACKUP_INSTANCE = 0x40;  // Enable instance field backup
+public static final int FLAG_FIELD_BACKUP_STATIC = 0x80;    // Enable static field backup
+public static final int FLAG_FIELD_BACKUP_BAN = 0x100;      // Disable field backup
+public static final int FLAG_FIELD_DISABLED = 0x200;        // Field feature disabled
 public static final int FLAG_FIELD_INVALID = FLAG_FIELD_BACKUP_BAN | FLAG_FIELD_DISABLED;
 ```
 
-### 操作标志
+### Operation Flags
 ```java
-public static final int FLAG_INIT_CLASS = 0x1;           // 强制类初始化
-public static final int FLAG_DEBUG = 0x2;                // 调试模式
-public static final int FLAG_LOADER_FROM_CALLER = 0x4;   // 使用调用者的类加载器
-public static final int FLAG_DISABLE_JIT = 0x8;          // 禁用JIT编译
-public static final int FLAG_SUSPEND_VM = 0x10;          // 操作期间挂起VM
-public static final int FLAG_NO_COMPILE = 0x20;          // 禁用编译
-public static final int FLAG_DISABLE_LOG = 0x400;        // 禁用日志
-public static final int FLAG_INJECT = 0x800;             // 注入模式
-public static final int FLAG_INIT_RPC = 0x1000;          // 初始化RPC
-public static final int FLAG_CALL_CHAIN = 0x2000;        // 调用链模式
+public static final int FLAG_INIT_CLASS = 0x1;           // Force class initialization
+public static final int FLAG_DEBUG = 0x2;                // Debug mode
+public static final int FLAG_LOADER_FROM_CALLER = 0x4;   // Use caller's class loader
+public static final int FLAG_DISABLE_JIT = 0x8;          // Disable JIT compilation
+public static final int FLAG_SUSPEND_VM = 0x10;          // Suspend VM during operation
+public static final int FLAG_NO_COMPILE = 0x20;          // Disable compilation
+public static final int FLAG_DISABLE_LOG = 0x400;        // Disable logging
+public static final int FLAG_INJECT = 0x800;             // Injection mode
+public static final int FLAG_INIT_RPC = 0x1000;          // Initialize RPC
+public static final int FLAG_CALL_CHAIN = 0x2000;        // Call-chain mode
+public static final int FLAG_ANTI_DETECTION = 0x4000;     // Anti-detection
+public static final int FLAG_INTERPRETER = 0x8000;        // Interpreter mode (disable compilation, force interpretation)
 ```
 
-### 状态常量
+### Status Constants
 ```java
-public final static int STATUS_INIT_OK = 1;      // 初始化成功
-public final static int STATUS_DISABLED = 2;     // 已禁用
-public final static int STATUS_NOT_INIT = 4;     // 未初始化
-public final static int STATUS_INIT_FAIL = 8;    // 初始化失败
+public final static int STATUS_INIT_OK = 1;      // Initialization succeeded
+public final static int STATUS_DISABLED = 2;     // Disabled
+public final static int STATUS_NOT_INIT = 4;     // Not initialized
+public final static int STATUS_INIT_FAIL = 8;    // Initialization failed
 ```
 
-### 搜索标志
+### Search Flags
 ```java
-public static final int SEARCH_STATIC = 1;       // 搜索静态方法
-public static final int SEARCH_INSTANCE = 2;     // 搜索实例方法
-public static final int SEARCH_ALL = SEARCH_STATIC | SEARCH_INSTANCE;  // 搜索所有方法
+public static final int SEARCH_STATIC = 1;       // Search static methods
+public static final int SEARCH_INSTANCE = 2;     // Search instance methods
+public static final int SEARCH_ALL = SEARCH_STATIC | SEARCH_INSTANCE;  // Search all methods
 ```
 
 ---
 
-## 初始化与配置
+## Initialization & Configuration
 
 ### `init`
 ```java
 public static boolean init(int flags);
 ```
-**功能**: 初始化Albatross框架  
-**参数**:
-- `flags`: 初始化标志位组合  
-**返回**: `true` 如果初始化成功，否则 `false`
+**Initializes the Albatross framework.**
+**Parameters**:
+- `flags`: combination of initialization flags
+**Returns**: `true` if initialization succeeded, otherwise `false`
 
 ### `loadLibrary`
 ```java
 public static boolean loadLibrary(String library);
 public static boolean loadLibrary(String library, int loadFlags);
 ```
-**功能**: 加载本地库并初始化Albatross  
-**参数**:
-- `library`: 要加载的本地库名称
-- `loadFlags`: 加载标志位组合  
-**返回**: `true` 如果Albatross初始化成功
+**Loads a native library and initializes Albatross.**
+**Parameters**:
+- `library`: name of the native library to load
+- `loadFlags`: combination of load flags
+**Returns**: `true` if Albatross initialized successfully
 
 ### `initRpcClass`
 ```java
 public native static boolean initRpcClass(Class<?> clz);
 ```
-**功能**: 初始化RPC类  
-**参数**:
-- `clz`: 需要RPC初始化的类  
-**返回**: `true` 如果成功，否则 `false`
+**Initializes an RPC class.**
+**Parameters**:
+- `clz`: class requiring RPC initialization
+**Returns**: `true` if successful, otherwise `false`
 
 ### `supportFeatures`
 ```java
 public static String supportFeatures();
 ```
-**功能**: 获取当前支持的功能列表  
-**返回**: 支持的功能字符串，如 "jit,aot,instruction"
+**Gets the list of supported features.**
+**Returns**: a feature string such as "jit,aot,instruction"
 
 ---
 
-## Hook操作
+## Hook Operations
 
 ### `backupAndHook`
 ```java
 public static boolean backupAndHook(Member target, Method hook, Method backup) throws AlbatrossException;
 ```
-**功能**: 备份并Hook一个方法  
-**参数**:
-- `target`: 目标方法或构造函数
-- `hook`: Hook方法
-- `backup`: 备份方法（可为null）  
-**返回**: `true` 如果成功  
-**抛出**: `AlbatrossException` 如果失败
+**Backs up and hooks a method.**
+**Parameters**:
+- `target`: target method or constructor
+- `hook`: hook method
+- `backup`: backup method (may be null)
+**Returns**: `true` if successful
+**Throws**: `AlbatrossException` on failure
 
 ### `backup`
 ```java
 public static boolean backup(Member target, Method backup) throws AlbatrossException;
 ```
-**功能**: 创建方法备份而不Hook  
-**参数**:
-- `target`: 目标方法或构造函数
-- `backup`: 备份方法  
-**返回**: `true` 如果成功
+**Creates a method backup without hooking.**
+**Parameters**:
+- `target`: target method or constructor
+- `backup`: backup method
+**Returns**: `true` if successful
 
 ### `replace`
 ```java
 public static boolean replace(Member target, Method hook) throws AlbatrossException;
 ```
-**功能**: 替换方法而不创建备份  
-**参数**:
-- `target`: 目标方法或构造函数
-- `hook`: 替换方法  
-**返回**: `true` 如果成功
+**Replaces a method without creating a backup.**
+**Parameters**:
+- `target`: target method or constructor
+- `hook`: replacement method
+**Returns**: `true` if successful
 
 ### `hookClass`
 ```java
+public static int hookClass() throws AlbatrossErr;                                    // Uses the caller class as hooker
 public static int hookClass(Class<?> hooker) throws AlbatrossErr;
 public static int hookClass(Class<?> hooker, Class<?> defaultClass) throws AlbatrossErr;
 public static int hookObject(Class<?> hooker, Object instance) throws AlbatrossErr;
 public static int hookClass(Class<?> hooker, ClassLoader loader, Class<?> defaultClass, Object instance) throws AlbatrossErr;
 ```
-**功能**: 应用Hooker类中定义的所有Hook  
-**参数**:
-- `hooker`: Hooker类
-- `defaultClass`: 默认目标类
-- `loader`: 类加载器
-- `instance`: 目标实例  
-**返回**: 成功Hook的数量
+**Applies all hooks defined in the hooker class.**
+**Parameters**:
+- `hooker`: hooker class
+- `defaultClass`: default target class
+- `loader`: class loader
+- `instance`: target instance
+**Returns**: the number of successfully applied hooks (or `REDUNDANT_ELEMENT` on failure)
+
+### `unhookClass` / `unhookMethod`
+```java
+public static int unhookClass(Class<?> hooker) throws AlbatrossErr;
+public static int unhookClass(Class<?> hooker, Class<?> targetClass);
+public static boolean unhookMethod(Member target, Method hook, Method backup);
+```
+**Removes hooks** from a class or a single method.
 
 ### `convert`
 ```java
 public static native <T> T convert(Object object, Class<T> hooker);
 ```
-**功能**: 将对象转换为Hooker类型以进行方法/字段访问
+**Casts an object** to a hooker type for method/field access.
 
 ---
 
-## 类与方法处理
+## Class & Method Handling
 
 ### `isCompiled`
 ```java
 public static boolean isCompiled(Method method);
 ```
-**功能**: 检查方法是否已编译为机器码
+**Checks whether a method** is compiled to machine code.
 
 ### `compileClass`
 ```java
 public static int compileClass(Class<?> clazz, int compileOption);
 ```
-**功能**: 使用指定编译策略编译类
+**Compiles a class** using the specified compilation strategy.
 
 ### `compileMethod`
 ```java
 public static boolean compileMethod(Member method);
 ```
-**功能**: 将特定方法编译为机器码
+**Compiles a specific method** to machine code.
 
 ### `setMethodExecMode`
 ```java
 public static boolean setMethodExecMode(Member method, int execMode);
 ```
-**功能**: 设置方法的执行模式
+**Sets the execution mode** of a method.
 
 ### `setExecConfiguration`
 ```java
 public static void setExecConfiguration(int targetExecMode, int hookerExecMode);
 public static void setExecConfiguration(int targetExecMode, int hookerExecMode, int hookerBackupExec);
 ```
-**功能**: 设置执行配置  
-**参数**:
-- `targetExecMode`: 目标方法执行模式
-- `hookerExecMode`: Hooker方法执行模式
-- `hookerBackupExec`: Hooker备份方法执行模式
+**Sets the execution configuration.**
+**Parameters**:
+- `targetExecMode`: execution mode of the target method
+- `hookerExecMode`: execution mode of the hooker method
+- `hookerBackupExec`: execution mode of the hooker backup method
+
+### `compileClassByAnnotation` / `setInlineMaxCodeUnits` / `getMethodCodeSize` / `getMethodHookCount`
+```java
+public static int compileClassByAnnotation(Class<?> clazz, int compileOption);
+public static void setInlineMaxCodeUnits(int n);
+public static native int getMethodCodeSize(Member method);
+public static native int getMethodHookCount(Member method);
+```
+**Compiles a class by its annotations, sets the inline limit, and queries method code size / hook count.**
+
+### `decompileAll` / `decompileMethod` / `addDecompileMethod` / `preventMethodInlining`
+```java
+public static native void decompileAll();                                    // Decompile all methods
+public static native boolean decompileMethod(Member method, boolean allowInline);
+public static boolean addDecompileMethod(Member target, Member hook, int dexPc);
+public static boolean preventMethodInlining(Member method);
+```
+**Decompilation and inlining prevention.**
 
 ### `disableCompileBackupCall`
 ```java
 public static void disableCompileBackupCall();
 ```
-**功能**: 禁用备份方法调用的编译
+**Disables compilation of backup-method calls.**
 
 ---
 
-## 字段操作
+## Field Operations
 
 ### `backupField`
 ```java
 public static boolean backupField(Field target, Field backup) throws FieldException, AlbatrossErr;
 ```
-**功能**: 创建字段实现的备份
+**Creates a backup** of a field implementation.
 
 ### `isFieldEnable`
 ```java
 public static boolean isFieldEnable();
 ```
-**功能**: 检查字段Hook是否启用（Android ≤7.0默认禁用）
+**Checks whether field hooking is enabled** (disabled by default on Android ≤7.0).
 
-### 字段备份控制
+### Field Backup Control
 ```java
-public static void disableFieldBackup();  // 禁用字段备份
-public static void enableAlbatross();     // 重新启用框架
-public static void disableAlbatross();    // 禁用整个框架
+public static void disableFieldBackup();  // Disable field backup
+public static void enableAlbatross();     // Re-enable the framework
+public static void disableAlbatross();    // Disable the whole framework
 ```
 
 ---
 
-## 事务管理
+## Transaction Management
 
 ### `transactionBegin`
 ```java
 public static int transactionBegin();
 public static synchronized native int transactionBegin(boolean disableHidden);
 ```
-**功能**: 开始Hook事务，用于批量处理
+**Starts a hook transaction** for batch processing.
 
 ### `transactionEnd`
 ```java
 public static int transactionEnd(boolean doTask);
 public static int transactionEnd(boolean doTask, boolean suspendVM);
 ```
-**功能**: 提交或回滚事务  
-**参数**:
-- `doTask`: 执行待处理的Hook
-- `suspendVM`: 操作期间挂起VM
+**Commits or rolls back** a transaction.
+**Parameters**:
+- `doTask`: execute the pending hooks
+- `suspendVM`: suspend the VM during the operation
 
 ### `transactionLevel`
 ```java
 public static synchronized native int transactionLevel();
 ```
-**功能**: 返回当前事务嵌套级别
+**Returns the current transaction nesting level.**
 
 ---
 
-## 指令Hook
+## Instruction Hook
 
 ### `hookInstruction`
 ```java
-public static InstructionListener hookInstruction(Member member, int dexPc, InstructionCallback callback);
-public static InstructionListener hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionCallback callback);
-public static InstructionListener hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionCallback callback, int compile);
+public static boolean hookInstruction(Member member, int dexPc, InstructionListener listener);
+public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener);
+public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener, int compile);
 ```
-**功能**: Hook方法指令执行  
-**参数**:
-- `member`: 目标方法
-- `dexPc`: DEX程序计数器位置
-- `minDexPc`/`maxDexPc`: DEX PC范围
-- `callback`: 指令回调
-- `compile`: 编译选项  
-**返回**: `InstructionListener` 实例，用于取消Hook
+**Hooks the instruction execution of a method; the callback fires when execution enters the listened range.**
+**Parameters**:
+- `member`: target method
+- `minDexPc`/`maxDexPc`: DEX PC range
+- `listener`: `InstructionListener` callback (`onEnter`/`onReturn`; registers can be read/written through the `invocationContext`)
+- `compile`: compilation option
+**Returns**: `true` if the hook was applied
+**Note**: the instruction hook is initialized automatically on first use (`insHookInit`). Cancel with `listener.unHook()`.
+
+### `insHookInit`
+```java
+public static void insHookInit();
+```
+**Manually initializes the instruction hook** (normally unnecessary — `hookInstruction` does it automatically).
 
 ---
 
+## Method-Call Hook
 
-## 工具方法
+### `hookMethod`
+```java
+public static MethodCallHook hookMethod(Member member, MethodCallback callback, int compile);
+```
+**Method-call-level hook — the callback fires on every invocation of the target method, without declaring a hooker class.**
+**Parameters**:
+- `member`: target method
+- `callback`: `MethodCallback` callback (`Object call(CallFrame)`)
+- `compile`: compilation option
+**Returns**: a `MethodCallHook` instance, cancelable via `unHook()`.
+
+---
+
+## Utility Methods
 
 ### `addToVisit`
 ```java
 public static boolean addToVisit(Class<?> clz);
 ```
-**功能**: 注册类以便将来Hook
+**Registers a class** for future hooking.
 
 ### `isMainThread`
 ```java
 public static native boolean isMainThread();
 ```
-**功能**: 检查当前线程是否为主应用线程
+**Checks whether the current thread** is the main application thread.
 
 ### `isHooked`
 ```java
 public static native boolean isHooked(Class<?> clz);
 ```
-**功能**: 验证类是否有活动的Hook
+**Verifies whether a class** has active hooks.
 
 ### `currentApplication`
 ```java
 public static native Application currentApplication();
 ```
-**功能**: 获取当前Application上下文
+**Retrieves the current Application** context.
+
+### `currentPackageName` / `currentProcessName` / `methodToString`
+```java
+public static native String currentPackageName();
+public static native String currentProcessName();
+public static native String methodToString(Member member);
+```
+**Gets the current package name / process name, and converts a method to a string.**
+
+### `currentInstrumentation` / `getMainHandler` / `getProfileFilePath` / `getThreadTid` / `getTid`
+```java
+public static Instrumentation currentInstrumentation();
+public static Handler getMainHandler();
+public static String getProfileFilePath();
+public static native int getThreadTid(Thread thread);
+public static native int getTid();
+```
+**Environment and thread information** (the first three are implemented through the internal `ActivityThreadH` mirror).
 
 ### `getCallerClass`
 ```java
 public native static Class<?> getCallerClass();
 ```
-**功能**: 获取调用者类
+**Gets the caller class.**
 
 ### `findClass`
 ```java
@@ -319,66 +386,151 @@ public static Class<?> findClass(String[] className);
 public static Class<?> findClass(String[] className, ClassLoader loader);
 public static Class<?> findClassFromApplication(String className);
 ```
-**功能**: 从所有类加载器中查找类
+**Finds a class** from all class loaders.
+
+### `findMethod` / `getDeclaredMethods`
+```java
+public static native Method findMethod(Class<?> clz, Class<?>[] argTypes, int isStatic);
+public static native Method[] getDeclaredMethods(Class<?> clz, int isStatic);
+```
+**Finds a method and gets the declared methods.**
+**Parameters**:
+- `clz`: target class
+- `argTypes`: array of argument types
+- `isStatic`: search flags (SEARCH_STATIC, SEARCH_INSTANCE, SEARCH_ALL)
+
+### `searchMethodCaller` / `searchField` / `searchObject` and other search APIs
+```java
+public static int searchMethodCaller(Member method, SearchCallback<Member> callback, boolean pickFirst, int searchScope);
+public static int searchMethodCaller(Class<?> clz, Member callee, SearchCallback<Member> callback, boolean pickFirst);
+public static int searchMethodCallerFromClass(Member method, Class<?> clz, SearchCallback<Member> callback, boolean pickFirst);
+public static int searchField(Field field, int operation, FieldCallback callback, boolean pickFirst, boolean searchPlatform);
+public static int searchFieldClassRef(Field field, Class<?> clz, int operation, FieldCallback callback);
+public static <T> int searchObject(Class<T> clz, SearchCallback<T> callback);
+public static <T> List<T> searchObjects(Class<T> clz);
+public static void searchBootClass(SearchClassCallback callback);
+public static void searchApplicationClass(SearchClassCallback callback);
+public static void searchClass(SearchClassCallback callback, int scope);
+```
+**Searches the heap / class loaders** for method callers, field references and object instances.
+
+### `registerAlbNative` / `registerOceanTracker` / `drmSet`
+```java
+public static native boolean registerAlbNative(Class<?> AlbNative, Method m, Method enter, Method leave);
+public static native boolean registerOceanTracker(Class<?> ocean);
+public static synchronized native boolean drmSet(byte[] value);
+```
+**Registers native hook callbacks** (called automatically from the static block of `AlbNative`), the ocean tracker, and DRM settings.
 
 ### `getRuntimeISA`
 ```java
 public static native int getRuntimeISA();
 ```
-**功能**: 获取运行时指令集架构  
-**返回**: 当前CPU架构，如 `kArm`, `kArm64`, `kX86`, 或 `kX86_64`
+**Gets the runtime instruction set architecture.**
+**Returns**: the current CPU architecture, e.g. `kArm`, `kArm64`, `kX86`, or `kX86_64`.
 
 ### `getObjectAddress`
 ```java
 public native static long getObjectAddress(Object object);
 ```
-**功能**: 获取对象的内存地址
+**Gets the memory address** of an object.
 
 ### `disableMethod`
 ```java
 public static boolean disableMethod(Method method);
 public static native boolean disableMethod(Method method, boolean throwException);
 ```
-**功能**: 禁用方法
+**Disables a method.**
 
 ### `resetLogger`
 ```java
 public static void resetLogger(Method infoLogger, Method errLogger);
 ```
-**功能**: 重置日志器
+**Resets the logger.**
 
 ### `disableLog`
 ```java
 public synchronized static void disableLog();
 ```
-**功能**: 禁用日志
+**Disables logging.**
 
 ---
 
-## 动态库操作
+## Native Hook
 
-### `openLib`
+The `qing.albatross.nativehook` package provides native (C/C++) library hooking capabilities.
+
+### `AlbNative`
 ```java
-public static DlInfo openLib(String libName);
+public class AlbNative {
+  public static void watchFunc(String symbol, long func);                                    // Watch a function
+  public static void hookInit(String logPath);                                               // Init native-hook logging
+  public static boolean dumpNativeMethod(String outputPath);                                 // Dump native methods
+  public static void registerLibraryCallback(SearchCallback callback, String libName);       // Register library-load callback
+  public static void enumerateModules(SearchCallback callback);                              // Enumerate loaded .so libraries
+  public static DlInfo openLib(String libName);                                              // Open a dynamic library (dlopen)
+  public static HookRecord hookInstruction(String lib, String function, InstructionCallback onEnter,
+                                           InstructionCallback onLeave, Object userdata);   // Instruction-level hook
+  public static HookRecord hookInstruction(long symbolAddress, InstructionCallback onEnter,
+                                           InstructionCallback onLeave, Object userdata);
+  public static int hookNative();                                                           // Hook native functions by annotations
+  public static int hookNative(Class<?> hooker, String lib);
+}
 ```
-**功能**: 打开动态库  
-**参数**:
-- `libName`: 库名称  
-**返回**: `DlInfo` 实例，用于符号查找
+**Native hook entry point.** `hookNative` automatically completes the hook based on `@TargetLibrary` (loads the `.so`), `@Symbol` (resolves symbol addresses) and `@FuncBackup` (backs up native functions).
 
-### `DlInfo` 类
+### `DlInfo`
 ```java
-public static class DlInfo {
-    public long getSymbolAddress(String symbol);  // 获取符号地址
-    public void close();                          // 关闭库句柄
+public class DlInfo {
+  public long enumerateFunctions(SearchCallback callback);   // Enumerate functions in the library
+  public long getSymbolAddress(String symbol);               // Get a symbol address
+  public void close();                                       // Close the library handle
+  public void backup(long address, Method method);           // Back up a native function (placeholder)
 }
 ```
 
+### `Address`
+```java
+public class Address {
+  public static Address malloc(int size, boolean clear);     // Allocate memory
+  public void clear();                                      // Zero-fill
+  public void delete();                                     // Free
+  public long getAddress();
+  public long getSize();
+  public String readString(int maxLen);                     // Read a string
+  public boolean writeString(String str);                   // Write a string
+}
+```
+
+### `NativeInvokeContext`
+Reads/writes arguments and the return value inside native instruction-hook callbacks:
+```java
+public class NativeInvokeContext {
+  public boolean isJavaThread();
+  public long getNthArgument(int nth);
+  public <T> T getNthArgument(int nth, Class<T> clazz);   // Read an object argument
+  public void setNthArgument(int nth, long value);
+  public void setResult(long value);
+  public long getResult();
+}
+```
+
+### `NativeMethodParser` / `NativeMethodRecord`
+Parses native method signatures (`ART` registers/argument types); `NativeMethodRecord(byte[] args, byte retType)` stores the result. On 32-bit platforms `long` is treated as a single word by default; annotate with `@Word64` to force 64-bit handling.
+
+### `Libc`
+A wrapper around common libc functions (`open`, `read`, `write`, `close`, `malloc`, `free`, etc.) for direct use.
+
+### `SearchCallback` / `InstructionCallback` / `HookRecord`
+- `SearchCallback`: `boolean match(String symbol, long addr, long size, int idx)` search callback
+- `InstructionCallback`: `void onCall(NativeInvokeContext ctx, Object userdata)` instruction callback
+- `HookRecord`: `unHook()` cancels a native instruction hook
+
 ---
 
-## 使用示例
+## Usage Examples
 
-### 示例1: 基本Hook
+### Example 1: Basic Hook
 ```java
 @TargetClass(Activity.class)
 public class ActivityHooker {
@@ -389,32 +541,33 @@ public class ActivityHooker {
     }
 }
 
-// 应用Hook
+// Apply the hook
 Albatross.hookClass(ActivityHooker.class);
 ```
 
-### 示例2: 指令Hook
+### Example 2: Instruction Hook
 ```java
 Method targetMethod = MyClass.class.getDeclaredMethod("targetMethod");
-InstructionListener listener = Albatross.hookInstruction(targetMethod, 0, 10, 
-    (method, self, dexPc, invocationContext) -> {
+boolean ok = Albatross.hookInstruction(targetMethod, 0, 10, new InstructionListener() {
+    @Override
+    public void onEnter(Member method, Object self, int dexPc, InvocationContext invocationContext) {
         Log.d("Albatross", "Instruction at dexPc: " + dexPc);
-    });
+    }
+});
 ```
 
-
-### 示例3: 事务Hook
+### Example 3: Transaction Hook
 ```java
 Albatross.transactionBegin();
 Albatross.setExecConfiguration(
-    ExecOption.JIT_OPTIMIZED, 
-    ExecOption.JIT_OPTIMIZED
+    ExecutionOption.JIT_OPTIMIZED,
+    ExecutionOption.JIT_OPTIMIZED
 );
 Albatross.hookClass(MyHooker.class);
 Albatross.transactionEnd(true);
 ```
 
-### 示例4: 字段访问
+### Example 4: Field Access
 ```java
 @TargetClass(className = "com.example.TargetClass")
 public class TargetHooker {
@@ -423,7 +576,7 @@ public class TargetHooker {
 
     public static void readSecretField(Object target) {
         if (Albatross.isFieldEnable()) {
-            // 通过convert访问字段
+            // Access the field through convert
             TargetHooker hooker = Albatross.convert(target, TargetHooker.class);
             int value = hooker.mSecretField;
             Log.d("Albatross", "Secret value: " + value);
@@ -432,43 +585,55 @@ public class TargetHooker {
 }
 ```
 
-### 示例6: 动态库操作
+### Example 5: Native Hook
 ```java
-DlInfo lib = Albatross.openLib("libc.so");
+// Open a library and look up a symbol
+DlInfo lib = AlbNative.openLib("libc.so");
 if (lib != null) {
     long mallocAddr = lib.getSymbolAddress("malloc");
     Log.d("Albatross", "malloc address: 0x" + Long.toHexString(mallocAddr));
     lib.close();
 }
+
+// Hook native functions by annotations
+@TargetLibrary("log")
+class LiblogH {
+    @Symbol("__android_log_print")
+    static long logPrint;
+
+    @FuncBackup("__android_log_print")
+    private static native int logPrintBackup(int prio, String tag, String msg);
+}
+AlbNative.hookNative(LiblogH.class, "log");
 ```
 
 ---
 
-## 重要说明
+## Important Notes
 
-1. **字段Hook限制**:
-   - Android ≤7.1默认禁用
+1. **Field Hooking Limitations**:
+   - Disabled by default on Android ≤7.1
 
-2. **编译策略**:
-   - 调试模式: 无优化,保持原有的执行方式
-   - 发布模式: JIT/AOT,机器码执行
+2. **Compilation Strategies**:
+   - Debug mode: no optimizations, keeps the original execution mode
+   - Release mode: JIT/AOT, machine-code execution
 
-3. **架构支持**:
+3. **Architecture Support**:
    - x86, x86_64, ARMv7, ARM64
 
-4. **错误处理**:
-   - 始终将Hook操作包装在try-catch中
-   - 检查返回值以确认成功状态
+4. **Error Handling**:
+   - Always wrap hook operations in try-catch
+   - Check return values to confirm success
 
-5. **事务使用**:
-   - 始终配对使用 `transactionBegin/End` 调用
-   - 事务失败时会自动回滚
+5. **Transaction Usage**:
+   - Always pair `transactionBegin/End` calls
+   - Transactions roll back automatically on failure
 
-6. **性能优化**:
-   - 使用事务进行批量Hook操作
-   - 合理设置编译选项
-   - 避免频繁的类查找操作
+6. **Performance Optimization**:
+   - Use transactions for batch hooking
+   - Set compilation options wisely
+   - Avoid frequent class lookups
 
 ---
 
-本API文档提供了使用Albatross构建高级Hook场景的基础。要获得完整功能，请结合[注解参考文档](annotatin_reference.md)中描述的注解系统使用这些方法。
+This API documentation provides the foundation for building advanced hooking scenarios with Albatross. For full functionality, combine these methods with the annotation system described in the [Annotation Reference](annotatin_reference_EN.md).

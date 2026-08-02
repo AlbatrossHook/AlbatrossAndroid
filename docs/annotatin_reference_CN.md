@@ -24,8 +24,11 @@ Albatross是一个基于注解驱动的Android Hook和反射框架，旨在运�
 | `value()`        | `Class<?>`      | 目标类类型 |
 | `className()`    | `String[]`      | 要匹配的类名数组（用于不可访问或延迟加载的类） |
 | `pendingHook()`  | `boolean`       | 如果为true，Hook将延迟到类加载时执行 |
-| `hookerExec()`| `int`           | Hooker本身的执行策略 |
-| `targetExec()`| `int`           | 目标类的执行策略 |
+| `hookerExec()`   | `int`           | Hooker本身的执行策略 |
+| `targetExec()`   | `int`           | 目标类的执行策略 |
+| `targetClassExec()` | `int`        | 目标类的其他（未Hook）方法是否编译 |
+| `hookerBackupExec()` | `int`      | Hooker备份方法的执行策略 |
+| `image()`        | `boolean`       | 是否为镜像类（默认true） |
 | `required()`     | `boolean`       | 如果为true，找不到类时抛出错误 |
 
 ---
@@ -56,10 +59,13 @@ Albatross提供了丰富的注解来定义方法和构造函数的Hook和备份�
 | `targetClass()`  | `Class<?>`      | 显式指定目标类                    |
 | `className()`    | `String[]`      | 延迟或不可访问类的类名       |
 | `required()`     | `boolean`       | 如果为true，找不到方法时抛出错误 |
-| `hookerExec()`| `int`           | Hook方法的执行策略               |
-| `targetExec()`| `int`           | 原始方法的执行策略           |
-| `option()`       | `int`           | Hook行为选项（如`DefOption.VIRTUAL`）    |
-| `minSdk()`, `maxSdk()` | `int`     | Hook的SDK版本约束                    |
+| `hookerExec()`   | `int`           | Hook方法的执行策略               |
+| `targetExec()`   | `int`           | 原始方法的执行策略（`@MethodHook`/`@StaticMethodHook`/`@ConstructorHook`没有此属性） |
+| `option()`       | `byte`          | Hook行为选项（如`DefOption.VIRTUAL`）    |
+| `triggerFieldName()` | `String`    | 触发Hook的字段名，更精确地控制Hook时机 |
+| `minAppVersion()`, `maxAppVersion()`, `appVersion()` | `int` | 生效的应用版本约束        |
+| `minSdk()`, `maxSdk()` | `byte`     | Hook的SDK版本约束                    |
+| `callWay()`      | `int`           | 备份方法调用原始方法的方式（`CallWay.ORIGIN`/`CURRENT`/`MIRROR`） |
 
 ---
 
@@ -78,7 +84,7 @@ Albatross提供了丰富的注解来定义方法和构造函数的Hook和备份�
 
 ---
 
-## 执行选项（`ExecOption`）
+## 执行选项（`ExecutionOption`）
 Albatross允许使用位标志对Hooker和目标代码在运行时的执行方式进行细粒度控制。
 
 ### 支持的编译选项
@@ -89,10 +95,12 @@ Albatross允许使用位标志对Hooker和目标代码在运行时的执行方�
 | `JIT_OSR`            | 栈上替换（OSR）     |
 | `JIT_BASELINE`       | 基线编译           |
 | `JIT_OPTIMIZED`      | 优化编译          |
+| `DECOMPILE`          | 反编译（与`INTERPRETER`同值） |
 | `INTERPRETER`      | 使用解释器模式               |
-| `COMPILE_DISABLE_AOT`    | 禁用AOT代码               |
-| `COMPILE_DISABLE_JIT`    | 禁用JIT编译        |
-| `COMPILE_AOT`            | 使用AOT                        |
+| `DISABLE_AOT`          | 禁用AOT代码               |
+| `DISABLE_JIT`          | 禁用JIT编译        |
+| `AOT`                  | 使用AOT                        |
+| `NATIVE_CODE`          | 原生机器码（AOT+JIT优化，默认） |
 
 ### 常见组合：
 | 组合               | 描述               |
@@ -127,12 +135,82 @@ Albatross通过注解支持高级参数匹配：
 void someMethod(@ParamInfo("com.example.MyClass") Object obj);
 ```
 
-### `@SubType`
-指示参数可以是声明类型的子类。
+### `@FuzzyMatch`
+标记参数（或方法返回值）进行模糊匹配：基元类型与其包装类可互换，子类匹配也被接受。
 
 ```java
-void someMethod(@SubType MyClass obj);
+void someMethod(@FuzzyMatch int count);
 ```
+
+### `@ArgumentType`、`@ArgumentTypeName`、`@ArgumentTypeSlot`
+用在`@FieldRef`字段上，声明集合字段的泛型参数类型，以便解析出精确的元素类：
+- `@ArgumentType` — 通过`Class<?>[] value()`、`className()`、`targetClass()`、`exactSearch()`指定
+- `@ArgumentTypeName` — 通过类名字符串（`value()`、`className()`、`targetClass()`）指定
+- `@ArgumentTypeSlot` — 命名一个参数槽位（`value()`），Hook后由Hook/备份方法的参数名填充
+
+```java
+@TargetClass(className = "com.example.SomeService")
+static class ServiceH {
+  @FieldRef
+  @ArgumentType(List.class)
+  List<Object> mList;
+}
+```
+
+---
+
+## Native Hook 注解（v3.6.0+）
+
+Albatross 3.6.0 新增了由 `qing.albatross.nativehook.AlbNative` 驱动的 native（C/C++）库Hook支持。以下注解用于声明native Hook目标：
+
+### `@TargetLibrary`
+放在Hooker类上，声明要加载的native库（`.so`）。值为库名，**不含** `lib` 前缀和 `.so` 后缀。
+
+```java
+@TargetLibrary("log")
+public class LiblogH {
+  // ...
+}
+```
+
+### `@Symbol`
+放在`long`字段上，声明一个native符号。`AlbNative.hookNative()`运行时，字段会被填充为通过`dlsym`解析出的符号地址。
+
+```java
+@TargetLibrary("log")
+public class LiblogH {
+  @Symbol("__android_log_print")
+  static long logPrint;
+}
+```
+
+### `@FuncBackup`
+放在native方法上，备份一个native函数。值为要备份的符号名。
+
+```java
+@TargetLibrary("log")
+public class LiblogH {
+  @FuncBackup("__android_log_print")
+  private static native int logPrint(int prio, String tag, String msg);
+}
+```
+
+### `@Word64`
+在32位平台上，`long`参数/返回值默认按单字处理。用`@Word64`标记参数或方法，强制按64位处理。
+
+```java
+@Word64
+private static native long readCounter(int base);
+```
+
+---
+
+## 辅助注解
+
+- **`@Alias`** — `@Target(FIELD, METHOD)`，`String value()`。给方法/字段起别名，混淆后仍能找到目标。
+- **`@ByName`** — `@Target(FIELD, METHOD)`，`String value()`，`boolean onlyAnno()`。按名字匹配目标成员。
+- **`@ExecutionMode`** — `@Target(METHOD)`，`int value()`（默认`NATIVE_CODE`）。设置单个方法的执行模式。
+- **`@CallWay`** — 常量类：`ORIGIN=0`、`CURRENT=1`、`MIRROR=2`。定义备份方法如何调用原始方法。
 
 ---
 
@@ -266,8 +344,8 @@ public class UtilsHooker {
 
 2. **合理设置执行选项**：
    ```java
-   @TargetClass(targetExec = ExecOption.JIT_OPTIMIZED, 
-                hookerExec = ExecOption.INTERPRETER)
+   @TargetClass(targetExec = ExecutionOption.JIT_OPTIMIZED, 
+                hookerExec = ExecutionOption.INTERPRETER)
    public class OptimizedHooker {
        // Hooker实现
    }

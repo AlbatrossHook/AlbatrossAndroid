@@ -25,8 +25,11 @@ The **target class** is the class being hooked. It is defined using the `@Target
 | `value()`        | `Class<?>`      | The target class type |
 | `className()`    | `String[]`      | Array of class names to match (for inaccessible or lazy-loaded classes) |
 | `pendingHook()`  | `boolean`       | If true, the hook is deferred until the class is loaded |
-| `hookerExec()`| `int`           | Execution strategy for the hooker itself |
-| `targetExec()`| `int`           | Execution strategy for the target class |
+| `hookerExec()`   | `int`           | Execution strategy for the hooker itself |
+| `targetExec()`   | `int`           | Execution strategy for the target class |
+| `targetClassExec()` | `int`        | Whether the target class compiles its other (non-hooked) methods |
+| `hookerBackupExec()` | `int`      | Execution strategy for the hooker backup methods |
+| `image()`        | `boolean`       | If true, the hooker is treated as an image class (default true) |
 | `required()`     | `boolean`       | If true, an error is thrown if the class is not found |
 
 ---
@@ -58,10 +61,13 @@ Albatross provides a rich set of annotations to define hooking and backup logic 
 | `targetClass()`  | `Class<?>`      | Explicitly specify the target class                    |
 | `className()`    | `String[]`      | Class names for deferred or inaccessible classes       |
 | `required()`     | `boolean`       | If true, an error is thrown if the method is not found |
-| `hookerExec()`| `int`           | Execution strategy for the hook method               |
-| `targetExec()`| `int`           | Execution strategy for the original method           |
-| `option()`       | `int`           | Hooking behavior option (e.g., `DefOption.VIRTUAL`)    |
-| `minSdk()`, `maxSdk()` | `int`     | SDK version constraints for hooking                    |
+| `hookerExec()`   | `int`           | Execution strategy for the hook method                 |
+| `targetExec()`   | `int`           | Execution strategy for the original method (not present on `@MethodHook`/`@StaticMethodHook`/`@ConstructorHook`) |
+| `option()`       | `byte`          | Hooking behavior option (e.g., `DefOption.VIRTUAL`)    |
+| `triggerFieldName()` | `String`    | Field name that triggers the hook; more precise control over when the hook applies |
+| `minAppVersion()`, `maxAppVersion()`, `appVersion()` | `int` | App version constraints for hooking        |
+| `minSdk()`, `maxSdk()` | `byte`     | SDK version constraints for hooking                    |
+| `callWay()`      | `int`           | How the backup method is invoked (`CallWay.ORIGIN`/`CURRENT`/`MIRROR`) |
 
 ---
 
@@ -82,7 +88,7 @@ Use `@FieldRef` to access fields of the target class from the hooker.
 ---
 
 
-##  Execution Options (`ExecOption`)
+## Execution Options (`ExecutionOption`)
 Albatross allows fine-grained control over how hooker and target code is executed at runtime using bit flags.
 ### Supported Compile Options
 | Flag                     | Description                    |
@@ -92,10 +98,12 @@ Albatross allows fine-grained control over how hooker and target code is execute
 | `JIT_OSR`            | On-Stack Replacement (OSR)     |
 | `JIT_BASELINE`       | Baseline compilation           |
 | `JIT_OPTIMIZED`      | Optimized compilation          |
+| `DECOMPILE`          | Decompile (same value as `INTERPRETER`) |
 | `INTERPRETER`      | Use interpreter mode               |
-| `COMPILE_DISABLE_AOT`    | Disable AOT code               |
-| `COMPILE_DISABLE_JIT`    | Disable JIT compilation        |
-| `COMPILE_AOT`            | Use AOT                        |
+| `DISABLE_AOT`          | Disable AOT code               |
+| `DISABLE_JIT`          | Disable JIT compilation        |
+| `AOT`                  | Use AOT                        |
+| `NATIVE_CODE`          | Native machine code (AOT + JIT optimized, default) |
 
 ### Common Combinations:
 | Combination               | Description               |
@@ -132,12 +140,82 @@ Used to explicitly specify the class name of a parameter when type inference is 
 void someMethod(@ParamInfo("com.example.MyClass") Object obj);
 ```
 
-### `@SubType`
-Indicates that the parameter can be a subclass of the declared type.
+### `@FuzzyMatch`
+Marks a parameter (or method return value) for fuzzy matching: primitive types and their wrappers are interchangeable, and subclass matches are accepted.
 
 ```java
-void someMethod(@SubType MyClass obj);
+void someMethod(@FuzzyMatch int count);
 ```
+
+### `@ArgumentType`, `@ArgumentTypeName`, `@ArgumentTypeSlot`
+Used on a `@FieldRef` field to declare the generic parameter types of a collection field so the exact element class can be resolved:
+- `@ArgumentType` — specify by `Class<?>[] value()`, `className()`, `targetClass()`, `exactSearch()`
+- `@ArgumentTypeName` — specify by class name strings (`value()`, `className()`, `targetClass()`)
+- `@ArgumentTypeSlot` — name a parameter slot (`value()`); filled by the hook/backup method parameter name after hooking
+
+```java
+@TargetClass(className = "com.example.SomeService")
+static class ServiceH {
+  @FieldRef
+  @ArgumentType(List.class)
+  List<Object> mList;
+}
+```
+
+---
+
+## Native Hook Annotations (v3.6.0+)
+
+Albatross 3.6.0 adds native (C/C++) library hooking support driven by `qing.albatross.nativehook.AlbNative`. The following annotations declare the native hook targets:
+
+### `@TargetLibrary`
+Placed on the hooker class to declare which native library (`.so`) to load. The value is the library name **without** the `lib` prefix and `.so` suffix.
+
+```java
+@TargetLibrary("log")
+public class LiblogH {
+  // ...
+}
+```
+
+### `@Symbol`
+Placed on a `long` field to declare a native symbol. When `AlbNative.hookNative()` runs, the field is filled with the symbol address resolved via `dlsym`.
+
+```java
+@TargetLibrary("log")
+public class LiblogH {
+  @Symbol("__android_log_print")
+  static long logPrint;
+}
+```
+
+### `@FuncBackup`
+Placed on a native method to back up a native function. The value is the symbol name(s) to back up.
+
+```java
+@TargetLibrary("log")
+public class LiblogH {
+  @FuncBackup("__android_log_print")
+  private static native int logPrint(int prio, String tag, String msg);
+}
+```
+
+### `@Word64`
+On 32-bit platforms, `long` arguments/returns are handled as a single word by default. Mark a parameter or method with `@Word64` to force 64-bit handling.
+
+```java
+@Word64
+private static native long readCounter(int base);
+```
+
+---
+
+## Auxiliary Annotations
+
+- **`@Alias`** — `@Target(FIELD, METHOD)`, `String value()`. Gives a method/field an alias so it can still be found after obfuscation.
+- **`@ByName`** — `@Target(FIELD, METHOD)`, `String value()`, `boolean onlyAnno()`. Matches a target member by name.
+- **`@ExecutionMode`** — `@Target(METHOD)`, `int value()` (default `NATIVE_CODE`). Sets the execution mode of a single method.
+- **`@CallWay`** — constants class: `ORIGIN=0`, `CURRENT=1`, `MIRROR=2`. Defines how a backup method invokes the original method.
 
 ---
 
