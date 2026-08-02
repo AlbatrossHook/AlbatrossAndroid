@@ -22,6 +22,7 @@ import android.content.pm.PackageManager;
 public class AppMetaInfo {
   public static String packageName;
   public static int versionCode;
+  public static String signature;
 
   public static void fetchFromContext(Context app) {
     String packageName = app.getPackageName();

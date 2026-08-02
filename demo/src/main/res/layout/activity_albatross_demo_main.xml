@@ -122,6 +122,13 @@
                 android:text="onCreate" />
 
 
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="nativeTest"
+                android:text="native" />
+
+
         </GridLayout>
 
     </ScrollView>

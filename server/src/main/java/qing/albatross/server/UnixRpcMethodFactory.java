@@ -39,22 +39,23 @@ public class UnixRpcMethodFactory {
         return camelCase;
       }
       StringBuilder snakeCase = new StringBuilder();
-      char firstChar = camelCase.charAt(0);
-      if (Character.isUpperCase(firstChar)) {
-        snakeCase.append(Character.toLowerCase(firstChar));
-      } else {
-        snakeCase.append(firstChar);
-      }
+      // 先处理第一个字符（统一转小写）
+      snakeCase.append(Character.toLowerCase(camelCase.charAt(0)));
+      // 从第二个字符开始遍历
       for (int i = 1; i < camelCase.length(); i++) {
-        char ch = camelCase.charAt(i);
-        if (Character.isUpperCase(ch)) {
-          snakeCase.append('_').append(Character.toLowerCase(ch));
-        } else {
-          snakeCase.append(ch);
+        char current = camelCase.charAt(i);
+        char prev = camelCase.charAt(i - 1);
+        // 规则：当前是大写 **且** 前一个是小写 → 才加下划线
+        if (Character.isUpperCase(current) && Character.isLowerCase(prev)) {
+          snakeCase.append('_');
         }
+        // 统一转小写追加
+        snakeCase.append(Character.toLowerCase(current));
       }
+
       return snakeCase.toString();
     }
+
 
 
     public String getName() {

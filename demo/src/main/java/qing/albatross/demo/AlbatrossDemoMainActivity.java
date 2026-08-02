@@ -322,4 +322,10 @@ public class AlbatrossDemoMainActivity extends Activity {
   }
 
 
+  public void nativeTest(View view) {
+    NativeBackupTest.test();
+    NativeInstructionHookTest.test();
+  }
+
+
 }

@@ -24,6 +24,7 @@ import android.annotation.SuppressLint;
 import android.app.Application;
 import android.app.Instrumentation;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.os.Debug;
 import android.os.Handler;
@@ -306,7 +307,7 @@ public final class Albatross {
 
   public static native boolean registerOceanTracker(Class<?> ocean);
 
-  public static native boolean registerAlbNative(Class<?> AlbNative, Method m);
+  public static native boolean registerAlbNative(Class<?> AlbNative, Method m, Method enter, Method leave);
 
   public static boolean addAssignableHooker(Class<?> hooker, Class<?> targetClass) throws AlbatrossErr {
     int setResult = setHookerAssignableNative(hooker, targetClass);
@@ -596,6 +597,16 @@ public final class Albatross {
     return hookInstruction(member, minDexPc, maxDexPc, listener, AOT);
   }
 
+  public synchronized static void insHookInit() {
+    if (!insIsMeasure) {
+      insIsMeasure = true;
+      try {
+        measureLayoutNative(Albatross.class.getDeclaredMethod("insLayoutMeasure", int.class, int.class, int.class));
+      } catch (Exception e) {
+        Albatross.log("measure ins layout fail", e);
+      }
+    }
+  }
 
   public static boolean hookInstruction(Member member, int minDexPc, int maxDexPc, InstructionListener listener, int compile) {
     if (listener.listenerId != 0)
@@ -603,6 +614,8 @@ public final class Albatross {
     if (Modifier.isStatic(member.getModifiers())) {
       ensureClassInitialized(member.getDeclaringClass());
     }
+    if (!insIsMeasure)
+      insHookInit();
     long listenerId = hookInstructionNative(member, minDexPc, maxDexPc, listener, listener.traceReturn);
     if (listenerId > 4096 || listenerId < 0) {
       listener.listenerId = listenerId;
@@ -724,6 +737,8 @@ public final class Albatross {
   public static final int FLAG_INIT_RPC = 0x1000;
   public static final int FLAG_CALL_CHAIN = 0x2000;
   public static final int FLAG_ANTI_DETECTION = 0x4000;
+  public static final int FLAG_INTERPRETER = 0x8000;
+  static boolean insIsMeasure = false;
 
   private static int albatross_flags = 0;
 
@@ -865,7 +880,7 @@ public final class Albatross {
     inline_max_code_units = n;
   }
 
-  private static final Map<ClassLoader, List<Class<?>>> hookers = new HashMap<>();
+  static final Map<ClassLoader, List<Class<?>>> hookers = new HashMap<>();
 
   @SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
   public static boolean init(int flags) {
@@ -977,6 +992,9 @@ public final class Albatross {
             albatross_flags &= ~FLAG_DISABLE_LOG;
             disableLog();
           }
+          if (containsFlags(FLAG_INTERPRETER)) {
+            disableCompile();
+          }
           pendingMap = new HashMap<>();
           initClassLoader();
           Albatross.hookClassInternal(MethodCallHook.Image.class, MethodCallHook.class.getClassLoader(), MethodCallHook.class, null);
@@ -989,7 +1007,6 @@ public final class Albatross {
         registerHookCallback(new Method[]{MethodCallHook.Image.callVoid.method, MethodCallHook.Image.callBool.method, MethodCallHook.Image.callChar.method, MethodCallHook.Image.callByte.method,
             MethodCallHook.Image.callShort.method, MethodCallHook.Image.callInt.method, MethodCallHook.Image.callFloat.method, MethodCallHook.Image.callLong.method,
             MethodCallHook.Image.callDouble.method, MethodCallHook.Image.callObject.method});
-        measureLayoutNative(Albatross.class.getDeclaredMethod("insLayoutMeasure", int.class, int.class, int.class));
 //        SafeToString.safeToString(null);
 //        compileClass(SafeToString.class, NATIVE_CODE);
         compileClassByAnnotation(Albatross.class, DO_NOTHING);
@@ -1170,6 +1187,7 @@ public final class Albatross {
     try {
       return hookClass(caller);
     } catch (AlbatrossErr e) {
+      Albatross.log("hook class:" + caller.getName() + " fail", e);
       return REDUNDANT_ELEMENT;
     }
   }
@@ -1639,7 +1657,7 @@ public final class Albatross {
               }
             } else {
               expectClass = ReflectionBase.getFieldGenericType(field);
-              if (instance != null) {
+              if (instance != null || Modifier.isStatic(targetField.getModifiers())) {
                 TargetClass fieldTarget = expectClass.getAnnotation(TargetClass.class);
                 if (fieldTarget != null) {
                   Class<?> t = getTargetClassFromAnnotation(fieldTarget, loader);
@@ -2965,6 +2983,8 @@ public final class Albatross {
 
   private static native int dexFileRefFieldNative(Field f, long dexFile);
 
+  public static native void decompileAll();
+
 
   @ExecutionMode(DISABLE_AOT)
   public static boolean classDexFileRefClass(Class<?> clz, Class<?> toRef) {
@@ -3229,6 +3249,22 @@ public final class Albatross {
   public static native String methodToString(Member member);
 
 
+  @TargetClass
+  public static final class LoadedApk {
+    @FieldRef
+    public ApplicationInfo mApplicationInfo;
+  }
+
+  @TargetClass
+  public static final class AppBindData {
+    @FieldRef
+    public LoadedApk info;
+
+    @FieldRef
+    public ApplicationInfo appInfo;
+  }
+
+
   @TargetClass(className = "android.app.ActivityThread", targetExec = DO_NOTHING)
   public static class ActivityThreadH {
 
@@ -3246,6 +3282,10 @@ public final class Albatross {
 
     @MethodBackup
     private native String getProfileFilePath();
+
+    @FieldRef
+    public AppBindData mBoundApplication;
+
 
   }
 
@@ -3340,6 +3380,8 @@ public final class Albatross {
   }
 
   synchronized static native boolean registerPropertyNative(String prop, String value);
+
+  public synchronized static native boolean drmSet(byte[] value);
 
   public static native Method findMethod(Class<?> clz, Class<?>[] argTypes, int isStatic);
 

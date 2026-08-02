@@ -22,6 +22,7 @@ import android.util.ArraySet;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 import qing.albatross.core.Albatross;
@@ -31,7 +32,7 @@ public class SafeToString {
   private static Set<Class<?>> safeToStringClass;
 
   // 配置参数（可按需调整）
-  private static final int MAX_TOTAL_LENGTH = 4096;      // 总字符数上限
+  private static int MAX_TOTAL_LENGTH = 4096;      // 总字符数上限
   private static final int MAX_ARRAY_ELEMENTS = 35;      // 数组最多显示几个元素
   private static final String TRUNCATED_SUFFIX = "..."; // 裁剪提示
   private static final String TRUNCATED_SUFFIX_LIST = " ...]";
@@ -40,6 +41,11 @@ public class SafeToString {
     if (safeToStringClass == null)
       safeToStringClass = new ArraySet<>();
     safeToStringClass.add(c);
+  }
+
+  public static void setMaxTotalLength(int maxTotalLength, boolean bs) {
+    MAX_TOTAL_LENGTH = maxTotalLength;
+    showBytes = bs;
   }
 
   public static boolean isSafeToString(Class<?> c) {
@@ -176,6 +182,8 @@ public class SafeToString {
     }
   }
 
+  static boolean showBytes = false;
+
   /**
    * 将任意数组（包括原始类型）转为字符串，并限制长度和元素数量
    */
@@ -183,8 +191,19 @@ public class SafeToString {
     if (array == null) return builder.append("null");
     int length = java.lang.reflect.Array.getLength(array);
     if (length == 0) return builder.append("[]");
-//    // 如果只允许极短长度，直接返回简略形式
-//    StringBuilder sb = new StringBuilder();
+    if (showBytes && array instanceof byte[]) {
+      try {//Charsets.UTF_8
+        String bs = new String((byte[]) array, StandardCharsets.UTF_8);
+        if (bs.length() > maxLength) {
+          bs = bs.substring(0, maxLength);
+          builder.append("bs:..");
+        } else
+          builder.append("bs:");
+        builder.append(bs);
+        return builder;
+      } catch (Exception ignore) {
+      }
+    }
     if (length > 20) {
       if (maxLength <= 10) {
         return builder.append("[total=").append(length).append("]");
