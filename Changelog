@@ -1,3 +1,29 @@
+version 3.6.0
+
+中文：
+- 新增 native 库 hook 支持：新增 qing.albatross.nativehook 包，支持 hook native 函数、指令级 hook 回调、读写参数与返回值、内存分配与读取
+- 新增注解 @TargetLibrary、@Symbol、@FuncBackup、@Word64，用于声明 native hook 目标
+- 新增 FLAG_INTERPRETER 初始化标志，可禁用编译强制走解释器执行
+- SafeToString 支持将 byte[] 参数以 UTF-8 字符串显示，并支持配置输出总长度上限
+- 新增 native 方法 decompileAll()，可反编译所有方法
+- AppMetaInfo 新增 signature 字段，可获取应用签名信息
+- 静态字段也支持通过 @TargetClass 注解解析目标类
+- 优化 RPC 方法名 camelCase 转 snake_case 的规则，连续大写时不再错误插入下划线
+- 指令 hook 支持惰性初始化，hook 时自动完成初始化
+- 安全优化：MethodStubs 的 stub 方法由 public 改为 protected
+
+English:
+- Add native library hook support: new package qing.albatross.nativehook for hooking native functions, instruction-level callbacks, reading/writing arguments and return values, memory allocation and reads
+- Add annotations @TargetLibrary, @Symbol, @FuncBackup, @Word64 for declaring native hook targets
+- Add the FLAG_INTERPRETER init flag to disable compilation and force interpreter execution
+- SafeToString can display byte[] arguments as UTF-8 strings, and the total output length limit is now configurable
+- Add native method decompileAll() to decompile all methods
+- AppMetaInfo adds a signature field to obtain the app signature
+- Static fields can now resolve the target class via the @TargetClass annotation
+- Optimize the camelCase-to-snake_case rule for RPC method names; no spurious underscore is inserted between consecutive capitals
+- Instruction hook initializes lazily, automatically during hooking
+- Security: MethodStubs stub methods changed from public to protected
+
 version 3.5.0
 - Support hook method return.
 - Optimize the compatibility for Android 12
