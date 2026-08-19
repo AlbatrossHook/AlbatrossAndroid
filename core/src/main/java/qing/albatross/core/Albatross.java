@@ -2173,7 +2173,7 @@ public final class Albatross {
                 else if (callWay == CURRENT)
                   putBackup(hookRecord, targetConstructor, m, targetExec).checkMethSign = checkArgument;
                 else {
-                  putMirrorBackup(backupRecords, targetMethod, m, targetExec, callWay).checkMethSign = checkArgument;
+                  putMirrorBackup(backupRecords, targetConstructor, m, targetExec, callWay).checkMethSign = checkArgument;
                 }
               }
             } catch (AlbatrossErr e) {
@@ -2189,12 +2189,12 @@ public final class Albatross {
         }
       }
     }
-    String[] methodNames = new String[2];
     Collection<HookRecord> hookRecords = hookRecord.values();
     for (HookRecord hookMethod : hookRecords) {
       Method hook = hookMethod.hook;
       Method backup = hookMethod.backup;
       Member target = hookMethod.target;
+      String[] methodNames = new String[2];
       try {
         boolean result;
         if (hook != null) {
@@ -2714,7 +2714,7 @@ public final class Albatross {
                 else if (callWay == CURRENT)
                   putBackup(hookRecord, targetConstructor, m, targetExec).checkMethSign = checkArgument;
                 else {
-                  putMirrorBackup(backupRecords, targetMethod, m, targetExec, callWay).checkMethSign = checkArgument;
+                  putMirrorBackup(backupRecords, targetConstructor, m, targetExec, callWay).checkMethSign = checkArgument;
                 }
               }
             } catch (AlbatrossErr e) {
@@ -2726,12 +2726,12 @@ public final class Albatross {
         }
       }
     }
-    String[] methodNames = new String[2];
     Collection<HookRecord> hookRecords = hookRecord.values();
     for (HookRecord hookMethod : hookRecords) {
       Method hook = hookMethod.hook;
       Method backup = hookMethod.backup;
       Member target = hookMethod.target;
+      String[] methodNames = new String[2];
       try {
         boolean result;
         if (hook != null) {
