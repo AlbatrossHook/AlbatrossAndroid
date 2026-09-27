@@ -116,7 +116,8 @@ public class ReflectUtils {
             for (int j = 0; j < hookerClasses.length; j++) {
               Class<?> hooker = hookerClasses[j];
               if (hooker != null) {
-                Class<?> targetClass = parameterTypes[j - checkParameterTypesResult.offset];
+                int typeIndex = j - checkParameterTypesResult.offset;
+                Class<?> targetClass = typeIndex >= 0 ? parameterTypes[typeIndex] : clazz;
                 Albatross.addAssignableHooker(hooker, targetClass);
               }
             }

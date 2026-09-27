@@ -15,6 +15,8 @@
  */
 package qing.albatross.server;
 
+import static qing.albatross.common.Const.*;
+
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -64,19 +66,6 @@ public class UnixRpcMethodFactory {
   }
 
   private final static Map<Class<?>, Byte> argsMap = new HashMap<>();
-
-  static final byte ARG_INT = 0;
-  static final byte ARG_BOOL = 1;
-  static final byte ARG_STR = 2;
-  static final byte ARG_BYTE = 3;
-  static final byte ARG_LONG = 4;
-  static final byte ARG_VOID = 5;
-  static final byte ARG_JSON = 6;
-  static final byte ARG_SHORT = 7;
-  static final byte ARG_FLOAT = 8;
-  static final byte ARG_DOUBLE = 9;
-  static final byte ARG_CHAR = 10;
-  static final byte ARG_BYTES = 11;
 
 
   static {

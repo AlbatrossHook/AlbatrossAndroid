@@ -16,6 +16,8 @@
 package qing.albatross.nativehook;
 
 
+import static qing.albatross.common.Const.*;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -25,19 +27,6 @@ import qing.albatross.annotation.Word64;
 import qing.albatross.core.Albatross;
 
 public class NativeMethodParser {
-
-  public static final byte ARG_INT = 0;
-  public static final byte ARG_BOOL = 1;
-  public static final byte ARG_STR = 2;
-  public static final byte ARG_BYTE = 3;
-  public static final byte ARG_LONG = 4;
-  public static final byte ARG_VOID = 5;
-  public static final byte ARG_JSON = 6;
-  public static final byte ARG_SHORT = 7;
-  public static final byte ARG_FLOAT = 8;
-  public static final byte ARG_DOUBLE = 9;
-  public static final byte ARG_CHAR = 10;
-  public static final byte ARG_BYTES = 11;
 
   public static final byte ARG_U64_WORD = 12;
 

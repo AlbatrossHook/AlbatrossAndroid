@@ -1,3 +1,29 @@
+version 3.7.0
+
+中文：
+- 新增 Albatross.searchSubClass()，可按父类搜索其所有子类；SearchClassCallback 泛型化为 SearchClassCallback<T>
+- 新增免装箱参数渲染：InvocationContext/MethodInvokeFrame 的 appendArguments() 与 SafeToString.appendPrimitive()/appendCharSequence()，直接从寄存器渲染参数，避免临时 Object[] 与 toString 分配
+- 新增 native 方法 loadMemoryDexClassLoader()，可从内存加载 dex
+- 将 native/RPC 参数类型常量统一到 qing.albatross.common.Const（按字符编码，如 'I'、'J'）
+- RPC 支持在同一个实例中注册多个 API 接口
+- 修复 JSON 序列化中孤立代理项（lone surrogate）导致产生非法 UTF-8 的问题
+- 修复 MethodInvokeFrame.getArgReg() 的寄存器索引计算错误
+- 修复构造函数 Hook 中镜像备份（mirror backup）使用错误目标方法的问题
+- 修复 ReflectUtils 参数类型索引越界
+- 修正解释器模式（FLAG_INTERPRETER）应同时禁用 JIT 编译
+
+English:
+- Add Albatross.searchSubClass() to search all subclasses of a given superclass; make SearchClassCallback generic (SearchClassCallback<T>)
+- Add boxing-free argument rendering: InvocationContext/MethodInvokeFrame.appendArguments() and SafeToString.appendPrimitive()/appendCharSequence(), rendering arguments directly from registers to avoid temporary Object[] and toString() allocations
+- Add native method loadMemoryDexClassLoader() to load dex from memory
+- Unify native/RPC argument-type constants into qing.albatross.common.Const (char-encoded, e.g. 'I', 'J')
+- Support registering multiple API interfaces on a single RPC instance
+- Fix invalid UTF-8 produced by lone surrogates during JSON serialization
+- Fix incorrect register index computation in MethodInvokeFrame.getArgReg()
+- Fix constructor hooks using the wrong target method for mirror backups
+- Fix out-of-bounds parameter type index in ReflectUtils
+- Fix interpreter mode (FLAG_INTERPRETER) to also disable JIT compilation
+
 version 3.6.0
 
 中文：

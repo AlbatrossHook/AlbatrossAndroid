@@ -161,6 +161,8 @@ public class TestMain {
     ApiTest.test(hook);
     TargetHookTest.main(hook);
     MethodDefTest.test(hook);
+    HookWayTest.test();
+    SearchSubClassTest.test();
     try {
       ActivityHook.test(hook);
       int level = Albatross.transactionBegin();

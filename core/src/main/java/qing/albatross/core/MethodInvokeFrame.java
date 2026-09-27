@@ -129,7 +129,7 @@ public class MethodInvokeFrame {
   public int getArgReg(long invocationContext, int i) {
     int idx = getFirstArgReg(invocationContext);
     if ((frameFlags & FLAG_GET_SLOW) == 0)
-      idx = +i;
+      idx += i;
     else {
       for (int z = 0; z < i; z++) {
         Class<?> argType = parameterTypes[z];
@@ -141,6 +141,93 @@ public class MethodInvokeFrame {
     }
     assert idx < numberVRegs;
     return idx;
+  }
+
+  /**
+   * Appends the argument list directly from the invocation registers. This keeps primitive
+   * values unboxed and avoids the temporary Object[] used by getArguments().
+   *
+   * @return true when at least one argument is present in the rendered list
+   */
+  public boolean appendArguments(long invocationContext, StringBuilder builder, int maxTotalLength,
+                                 int maxArrayElements, boolean skipReceiver) {
+    if (invocationContext == 0) {
+      return false;
+    }
+    int originalLength = builder.length();
+    try {
+      getFirstArgReg(invocationContext);
+      Class<?>[] argTypes = parameterTypes;
+      int start = skipReceiver && member != null && !Modifier.isStatic(member.getModifiers()) ? 1 : 0;
+      int argCount = argTypes.length - start;
+      if (argCount <= 0) {
+        return false;
+      }
+
+      int elementsToShow = Math.min(argCount, maxArrayElements);
+      boolean arrayTruncated = elementsToShow < argCount;
+      if (arrayTruncated) {
+        maxTotalLength -= 5;
+      }
+      if (argCount > 20) {
+        int prefixStart = builder.length();
+        builder.append("[=").append(argCount).append(", ");
+        maxTotalLength -= builder.length() - prefixStart;
+      } else {
+        builder.append('[');
+        maxTotalLength -= 1;
+      }
+
+      for (int visibleIndex = 0; visibleIndex < elementsToShow; visibleIndex++) {
+        if (maxTotalLength <= 0) {
+          builder.append(SafeToString.TRUNCATED_SUFFIX_LIST);
+          return true;
+        }
+        int argIndex = start + visibleIndex;
+        Class<?> type = argTypes[argIndex];
+        int reg = getArgReg(invocationContext, argIndex);
+        if (type.isPrimitive()) {
+          long rawValue;
+          if (type == long.class || type == double.class) {
+            rawValue = InstructionListener.GetVRegLong(invocationContext, reg);
+//            rawValue = type == long.class
+//                ? InstructionListener.GetVRegLong(invocationContext, reg)
+//                : Double.doubleToRawLongBits(InstructionListener.GetVRegDouble(invocationContext, reg));
+//          } else if (type == float.class) {
+//            rawValue = Float.floatToRawIntBits(InstructionListener.GetVRegFloat(invocationContext, reg));
+          } else {
+            rawValue = InstructionListener.GetVReg(invocationContext, reg);
+          }
+          int oldLength = builder.length();
+          SafeToString.appendPrimitive(builder, type, rawValue);
+          maxTotalLength -= builder.length() - oldLength;
+        } else {
+          Object value = InstructionListener.GetVRegReference(invocationContext, reg);
+          if (value == null) {
+            builder.append(',');
+            maxTotalLength -= 1;
+            continue;
+          }
+          int oldLength = builder.length();
+          SafeToString.safeToString(builder, value, maxTotalLength, maxArrayElements);
+          maxTotalLength -= builder.length() - oldLength;
+        }
+        if (visibleIndex != elementsToShow - 1) {
+          builder.append(", ");
+          maxTotalLength -= 2;
+        }
+      }
+      if (arrayTruncated) {
+        builder.append(SafeToString.TRUNCATED_SUFFIX_LIST);
+      } else {
+        builder.append(']');
+      }
+      return true;
+    } catch (Throwable e) {
+      builder.setLength(originalLength);
+      Albatross.log("appendArguments err", e);
+      return false;
+    }
   }
 
   public void setParamObject(long invocationContext, int i, Object o) {

@@ -13,18 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package qing.albatross.search;
+package qing.albatross.common;
 
-
-public interface SearchClassCallback<T> {
-
-  int STOP = 0;
-  int CONTINUE = 1;
-  int SKIP_CURRENT_DEX = 2;
-
-  int SCOPE_PLATFORM = 1;
-  int SCOPE_APPLICATION = 2;
-  int SCOPE_ALL = SCOPE_APPLICATION | SCOPE_PLATFORM;
-
-  int match(Class<T> o, long pos);
+public class Const {
+  public static final byte ARG_INT = 'I';
+  public static final byte ARG_BOOL = 'Z';
+  public static final byte ARG_STR = 's';
+  public static final byte ARG_BYTE = 'B';
+  public static final byte ARG_LONG = 'J';
+  public static final byte ARG_VOID = 'V';
+  public static final byte ARG_JSON = 'j';
+  public static final byte ARG_SHORT = 'S';
+  public static final byte ARG_FLOAT = 'F';
+  public static final byte ARG_DOUBLE = 'D';
+  public static final byte ARG_CHAR = 'C';
+  public static final byte ARG_BYTES = 'b';
 }

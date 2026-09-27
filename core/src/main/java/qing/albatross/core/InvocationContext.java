@@ -221,6 +221,8 @@ public class InvocationContext {
   }
 
   public Object[] getArguments() {
+    if (invocationContext > 0 && invocationContext < 4096)
+      return null;
     return methodFrame.getArguments(invocationContext);
   }
 
@@ -230,6 +232,17 @@ public class InvocationContext {
 
   public Object[] getToStringArguments() {
     return methodFrame.getToStringArguments(invocationContext);
+  }
+
+
+  public boolean appendArguments(StringBuilder builder, int maxTotalLength, int maxArrayElements,
+                                 boolean skipReceiver) {
+    // Keep the same fast-path guard as getArguments() for synthetic/native callback contexts.
+    if (invocationContext > 0 && invocationContext < 4096) {
+      return false;
+    }
+    return methodFrame.appendArguments(invocationContext, builder, maxTotalLength, maxArrayElements,
+        skipReceiver);
   }
 
 

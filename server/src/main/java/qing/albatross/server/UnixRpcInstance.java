@@ -15,7 +15,8 @@
  */
 package qing.albatross.server;
 
-import static qing.albatross.server.UnixRpcMethodFactory.ARG_BYTE;
+
+import static qing.albatross.common.Const.ARG_BYTE;
 
 import android.util.ArrayMap;
 
@@ -44,12 +45,18 @@ public abstract class UnixRpcInstance {
 
   protected abstract Class<?> getApi();
 
-  public UnixRpcServer createServer(String socketPath, boolean isAbstract) {
+  protected Class<?>[] getApis() {
     Class<?> api = getApi();
-    UnixRpcServer server = UnixRpcServer.create(socketPath, this, isAbstract, api);
+    assert api != null;
+    return new Class[]{api};
+  }
+
+  public UnixRpcServer createServer(String socketPath, boolean isAbstract) {
+    Class<?>[] apis = getApis();
+    UnixRpcServer server = UnixRpcServer.create(socketPath, this, isAbstract, apis);
     if (server != null) {
       if (socketPath != null && socketPath.length() > 1) {
-        server.setName(api.getName());
+        server.setName(apis[0].getName());
         server.start();
       }
       return server;

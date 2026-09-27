@@ -35,7 +35,7 @@ public class SafeToString {
   private static int MAX_TOTAL_LENGTH = 4096;      // 总字符数上限
   private static final int MAX_ARRAY_ELEMENTS = 35;      // 数组最多显示几个元素
   private static final String TRUNCATED_SUFFIX = "..."; // 裁剪提示
-  private static final String TRUNCATED_SUFFIX_LIST = " ...]";
+  public static final String TRUNCATED_SUFFIX_LIST = " ...]";
 
   public static void addSafeToStringClass(Class<?> c) {
     if (safeToStringClass == null)
@@ -85,18 +85,19 @@ public class SafeToString {
     }
     String name = aClass.getName();
     try {
+      // CharSequence types (String, StringBuilder, StringBuffer) can be bounded in-place.
+      if (obj instanceof CharSequence
+          && (name.startsWith("android.") || name.startsWith("java."))) {
+        if(obj instanceof String)
+          return builder.append(safeTruncate((String)obj, maxLength));
+        return appendCharSequence(builder, (CharSequence) obj, maxLength);
+      }
       // Java 标准库对象直接 toString()
       if (name.startsWith("java.lang")) {
         if (obj instanceof Method || obj instanceof Constructor<?>) {
           return builder.append(Albatross.methodToString((Member) obj));
         }
         return builder.append(safeTruncate(obj.toString(), maxLength));
-      }
-      // CharSequence 类型（String、StringBuilder 等）
-      if (obj instanceof CharSequence) {
-        if (name.startsWith("android.") || name.startsWith("java.")) {
-          return builder.append(safeTruncate(obj.toString(), maxLength));
-        }
       }
       // 用户注册的安全类
       if (safeToStringClass != null && safeToStringClass.contains(aClass)) {
@@ -111,6 +112,63 @@ public class SafeToString {
     // 默认 fallback：类名 + hashCode
     return builder.append(name).append("@").append(Integer.toHexString(System.identityHashCode(obj)));
 //    return safeTruncate(fallback, maxLength);
+  }
+
+  /**
+   * Appends a primitive value represented by the raw register value without boxing it.
+   * The encoding matches the values produced by
+   * {@link qing.albatross.core.MethodInvokeFrame#boxPrim}.
+   */
+  public static StringBuilder appendPrimitive(StringBuilder builder, Class<?> type, long rawValue) {
+    if (type == int.class) {
+      return builder.append((int) rawValue);
+    }
+    if (type == boolean.class) {
+      return builder.append(rawValue != 0);
+    }
+    if (type == char.class) {
+      return builder.append((char) rawValue);
+    }
+    if (type == long.class) {
+      return builder.append(rawValue);
+    }
+    if (type == float.class) {
+      return builder.append(Float.intBitsToFloat((int) rawValue));
+    }
+    if (type == double.class) {
+      return builder.append(Double.longBitsToDouble(rawValue));
+    }
+    if (type == byte.class) {
+      return builder.append((byte) rawValue);
+    }
+    if (type == short.class) {
+      return builder.append((short) rawValue);
+    }
+    // void has no textual return value. Keep this tolerant for malformed metadata.
+    return builder;
+  }
+
+  /** Append a CharSequence directly, avoiding a full toString() allocation for builders/buffers. */
+  private static StringBuilder appendCharSequence(StringBuilder builder, CharSequence value,
+                                                  int maxLength) {
+    if (value == null) {
+      return builder.append("null");
+    }
+    int length = value.length();
+    if (length <= maxLength) {
+      return builder.append(value);
+    }
+    if (maxLength <= TRUNCATED_SUFFIX.length()) {
+      for (int i = 0; i < maxLength && i < TRUNCATED_SUFFIX.length(); i++) {
+        builder.append(TRUNCATED_SUFFIX.charAt(i));
+      }
+      return builder;
+    }
+    int contentLength = maxLength - TRUNCATED_SUFFIX.length();
+    for (int i = 0; i < contentLength; i++) {
+      builder.append(value.charAt(i));
+    }
+    return builder.append(TRUNCATED_SUFFIX);
   }
 
   /**

@@ -15,9 +15,9 @@
  */
 package qing.albatross.server;
 
-import static qing.albatross.server.UnixRpcMethodFactory.ARG_BYTE;
-import static qing.albatross.server.UnixRpcMethodFactory.ARG_INT;
-import static qing.albatross.server.UnixRpcMethodFactory.ARG_STR;
+import static qing.albatross.common.Const.ARG_BYTE;
+import static qing.albatross.common.Const.ARG_INT;
+import static qing.albatross.common.Const.ARG_STR;
 
 import java.lang.reflect.Method;
 import java.util.Map;
@@ -58,20 +58,25 @@ public class UnixRpcServer extends Thread {
     }
   }
 
-  static UnixRpcServer create(String socketPath, UnixRpcInstance owner, boolean isAbstract, Class<?> api) {
+  static UnixRpcServer create(String socketPath, UnixRpcInstance owner, boolean isAbstract, Class<?>[] apis) {
     if (!isInit)
       return null;
     try {
-      if (!ReflectUtils.isInterfaceOf(owner.getClass(), api)) {
-        Albatross.log(owner.getClass() + " is not instance of " + api.getName());
-        return null;
-      }
+      for (Class<?> api : apis)
+        if (!ReflectUtils.isInterfaceOf(owner.getClass(), api)) {
+          Albatross.log(owner.getClass() + " is not instance of " + api.getName());
+          return null;
+        }
       UnixRpcServer server = new UnixRpcServer(socketPath, isAbstract, owner);
       if (server.serverObj > 40960 || server.serverObj < 0) {
-        if (server.registerApi(0, owner, api)) {
-          owner.setServer(server);
-          return server;
+        for (Class<?> api : apis) {
+          if (!server.registerApi(0, owner, api)) {
+            Albatross.log(owner + " register api " + api + " fail");
+//            return null;
+          }
         }
+        owner.setServer(server);
+        return server;
       }
     } catch (Exception e) {
       Albatross.log("Unix Rpc Server create", e);
@@ -101,7 +106,7 @@ public class UnixRpcServer extends Thread {
 
   public void registerApi(Object instance, Class<?> apiInterface) {
     int id = registerInstance(serverObj, instance);
-    assert ReflectUtils.isInterfaceOf(instance.getClass(),apiInterface);
+    assert ReflectUtils.isInterfaceOf(instance.getClass(), apiInterface);
     registerApi(id, instance, apiInterface);
   }
 

@@ -992,7 +992,7 @@ public final class Albatross {
             albatross_flags &= ~FLAG_DISABLE_LOG;
             disableLog();
           }
-          if (containsFlags(FLAG_INTERPRETER)) {
+          if (containsFlags(FLAG_INTERPRETER | FLAG_DISABLE_JIT)) {
             disableCompile();
           }
           pendingMap = new HashMap<>();
@@ -2173,7 +2173,7 @@ public final class Albatross {
                 else if (callWay == CURRENT)
                   putBackup(hookRecord, targetConstructor, m, targetExec).checkMethSign = checkArgument;
                 else {
-                  putMirrorBackup(backupRecords, targetMethod, m, targetExec, callWay).checkMethSign = checkArgument;
+                  putMirrorBackup(backupRecords, targetConstructor, m, targetExec, callWay).checkMethSign = checkArgument;
                 }
               }
             } catch (AlbatrossErr e) {
@@ -2189,7 +2189,6 @@ public final class Albatross {
         }
       }
     }
-    String[] methodNames = new String[2];
     Collection<HookRecord> hookRecords = hookRecord.values();
     for (HookRecord hookMethod : hookRecords) {
       Method hook = hookMethod.hook;
@@ -2214,6 +2213,7 @@ public final class Albatross {
         }
         if (result) {
           if (!slotMap.isEmpty()) {
+            String[] methodNames = new String[2];
             if (hook != null)
               methodNames[0] = hook.getName();
             if (backup != null)
@@ -2714,7 +2714,7 @@ public final class Albatross {
                 else if (callWay == CURRENT)
                   putBackup(hookRecord, targetConstructor, m, targetExec).checkMethSign = checkArgument;
                 else {
-                  putMirrorBackup(backupRecords, targetMethod, m, targetExec, callWay).checkMethSign = checkArgument;
+                  putMirrorBackup(backupRecords, targetConstructor, m, targetExec, callWay).checkMethSign = checkArgument;
                 }
               }
             } catch (AlbatrossErr e) {
@@ -2726,7 +2726,6 @@ public final class Albatross {
         }
       }
     }
-    String[] methodNames = new String[2];
     Collection<HookRecord> hookRecords = hookRecord.values();
     for (HookRecord hookMethod : hookRecords) {
       Method hook = hookMethod.hook;
@@ -2741,6 +2740,7 @@ public final class Albatross {
         }
         if (result) {
           if (!slotMap.isEmpty()) {
+            String[] methodNames = new String[2];
             if (hook != null)
               methodNames[0] = hook.getName();
             if (backup != null)
@@ -2973,6 +2973,8 @@ public final class Albatross {
 
   private static native void searchClassNative(Object callback, int scope);
 
+  private static native int searchSubClassNative(Object callback, Class<?> subClass, int scope);
+
   private static native int searchMethodCallerNative(Class<?> clz, Member callee, Object callback, boolean pickFirst, int refId);
 
   private static native int searchFieldNative(Class<?> clz, Field field, Object callback, int operation, boolean pickFirst, int refId);
@@ -3053,15 +3055,20 @@ public final class Albatross {
     return callbackDelegate.count;
   }
 
-  public static void searchBootClass(SearchClassCallback callback) {
+  public static void searchBootClass(SearchClassCallback<?> callback) {
     searchClassNative(callback, SearchClassCallback.SCOPE_PLATFORM);
   }
 
-  public static void searchApplicationClass(SearchClassCallback callback) {
+  public static <T> int searchSubClass(SearchClassCallback<T> callback, Class<T> subClass, int searchScope) {
+    return searchSubClassNative(callback, subClass, searchScope);
+  }
+
+
+  public static void searchApplicationClass(SearchClassCallback<?> callback) {
     searchClassNative(callback, SearchClassCallback.SCOPE_APPLICATION);
   }
 
-  public static void searchClass(SearchClassCallback callback, int scope) {
+  public static void searchClass(SearchClassCallback<?> callback, int scope) {
     searchClassNative(callback, scope);
   }
 
@@ -3390,6 +3397,8 @@ public final class Albatross {
   private native static boolean addPendingHookNative(String clsName, Class<?> hookClass);
 
   public native static long getObjectAddress(Object object);
+
+  public native static ClassLoader loadMemoryDexClassLoader(String dexPath, String librarySearchPath, ClassLoader parent, String mapName);
 
   private static boolean addPendingHook(String clsName, Class<?> hookClass) {
     if (pendingMap.containsKey(clsName))

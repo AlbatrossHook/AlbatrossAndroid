@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2025 QingWan (qingwanmail@foxmail.com)
  *
@@ -14,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 
 package qing.albatross.server;
 
@@ -46,7 +44,17 @@ public class JsonFormatter {
     out.append("\"");
     for (int i = 0, length = value.length(); i < length; i++) {
       char c = value.charAt(i);
-
+      if (c >= '\uD800' && c <= '\uDFFF') {
+        // 孤立代理项经 RPC 序列化会变成非法 UTF-8 字节（CESU-8），成对放行、落单替换为 U+FFFD
+        char next = i + 1 < length ? value.charAt(i + 1) : 0;
+        if (c <= '\uDBFF' && next >= '\uDC00' && next <= '\uDFFF') {
+          out.append(c).append(next);
+          i++;
+        } else {
+          out.append('\uFFFD');
+        }
+        continue;
+      }
       /*
        * From RFC 4627, "All Unicode characters may be placed within the
        * quotation marks except for the characters that must be escaped:
