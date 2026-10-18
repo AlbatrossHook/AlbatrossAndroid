@@ -1,3 +1,31 @@
+version 4.0.0
+
+中文：
+- 新增免签名动态 Java 方法 Hook：Albatross.hookMethod(Member, MethodHookCallback) 支持 before/after 回调、跳过原方法、读写参数与返回值；提供 CallFrame、MethodCallHook、MethodHook 注解及 DynMethodStubs/DynStaticMethodStubs，无需预先生成镜像类
+- 新增 qing.albatross.nativehook.CModule：进程内 tcc 动态编译 C 代码（compile/getFunction/close），支持 alb_module_init/alb_module_fini 生命周期回调、编译缓存与外部符号注入；新增 NativeFunction 按签名调用任意 native 地址
+- 新增 Stalker 代码追踪 Java API：followFunction/followSymbol/followCurrentThread、CALL/RET/EXEC/BLOCK/COMPILE 事件流、StalkerIterator/StalkerTransformer/StalkerCallout、模块/地址 include/exclude、事件窗口超时/上限/停止原因（followThread 后端仍在完善）
+- 新增 ocean trace 模块 qing.albatross.tracker：OceanTracker/OceanSinker/EventType，内置 KeyWordSinker/StringSinker/DefaultSinker，支持方法调用/返回、字段读写事件、白名单包与 trace 窗口，新增 OceanLogger
+- Native Hook 扩展：延迟 hook（hookInstructionDelayed/hookNativeDelayed，按符号或偏移）、NativeCpuContext、Address/DlInfo/Libc/NativeInvokeContext 增强，新增 @FuncHook 注解
+- 新增 @AsyncRpc：RPC 方法可异步执行，耗时/可能阻塞的接口不占用 agent 的 epoll 循环；UnixRpcServer.registerMethod 支持 async
+- 新增/完善 demo 与回归用例：CModuleTest、CModuleStalkerTest、StalkerTest、DynamicHookTest、NativeHookTest、OceanTraceTest、TestRunner/TestSuiteRunner、OceanDemoActivity 等
+- 修复 x86 32 位 release 构建初始化崩溃：Thread::DecodeObject 的 i386 内联汇编未声明 EBX clobber，-O2 下 ref 被分配到 EBX 后压入栈地址，ART 报 invalid jobject；三处汇编补 ebx/ecx/edx/cc
+- 修复 16KB 页设备：libapi.so 按 16KB 对齐；HookRecord 补 hookWay 字段以匹配原生布局，修复 OceanTrace 在 16KB 页上的 ART JIT 崩溃
+- 修复无 ActivityThread 进程的 ThreadConfig 主线程 Handler NPE（降级为立即摘除）
+- 补全 demo native harness 的 NativeHook/NativeBackup/NativeInstructionHook JNI 实现；TargetHookTest 入口与内部版对齐，ExtendImplTest 在扩展实现 hook 不可用时显式 skip
+
+English:
+- Add signature-free dynamic Java method hooks: Albatross.hookMethod(Member, MethodHookCallback) with before/after callbacks, skipping the original method, and reading/writing arguments and return values; add CallFrame, MethodCallHook, the MethodHook annotation, and DynMethodStubs/DynStaticMethodStubs, without pre-generated mirror classes
+- Add qing.albatross.nativehook.CModule: in-process tcc compilation of C code (compile/getFunction/close) with alb_module_init/alb_module_fini lifecycle callbacks, compile caching, and external symbol injection; add NativeFunction to call any native address with a signature
+- Add the Stalker code-tracing Java API: followFunction/followSymbol/followCurrentThread, CALL/RET/EXEC/BLOCK/COMPILE event streams, StalkerIterator/StalkerTransformer/StalkerCallout, module/address include/exclude, and trace-window timeout/limit/stop reason (the followThread backend is still experimental)
+- Add the ocean trace module qing.albatross.tracker: OceanTracker/OceanSinker/EventType, built-in KeyWordSinker/StringSinker/DefaultSinker, method call/return and field read/write events, package whitelist and trace windows, plus OceanLogger
+- Extend Native Hook: delayed hooks (hookInstructionDelayed/hookNativeDelayed, by symbol or offset), NativeCpuContext, Address/DlInfo/Libc/NativeInvokeContext enhancements, and the @FuncHook annotation
+- Add @AsyncRpc: RPC methods can run asynchronously so long-running/blocking methods do not occupy the agent's epoll loop; UnixRpcServer.registerMethod supports an async flag
+- Add/expand demo and regression tests: CModuleTest, CModuleStalkerTest, StalkerTest, DynamicHookTest, NativeHookTest, OceanTraceTest, TestRunner/TestSuiteRunner, OceanDemoActivity, etc.
+- Fix the x86 32-bit release build initialization crash: the i386 inline asm in Thread::DecodeObject did not declare EBX as clobbered; at -O2 ref was allocated to EBX and a stack address was pushed instead, causing ART's invalid jobject; add ebx/ecx/edx/cc clobbers to the three asm sites
+- Fix 16KB-page devices: align libapi.so to 16KB; add HookRecord.hookWay to match the native layout, fixing the ART JIT crash in OceanTrace on 16KB pages
+- Fix the main-thread Handler NPE in ThreadConfig for processes without ActivityThread (fall back to immediate removal)
+- Complete the demo native harness JNI implementations for NativeHook/NativeBackup/NativeInstructionHook; align the TargetHookTest entry with the internal version and explicitly skip ExtendImplTest when extended-implementation hooks are unavailable
+
 version 3.7.0
 
 中文：
