@@ -4,7 +4,7 @@
 ----------------
 
 ## 概述
-**Albatross Android** 是一款专为安卓系统（Android 7.0 至 Android 16 Baklava）设计的高性能、低影响的Hook与反射框架。
+**Albatross Android** 是一款专为安卓系统（Android 7.0+，API 24+；4.0.0 已在 Android 17 / API 37 及 16KB 页设备上验证）设计的高性能、低影响的Hook与反射框架。
 
 该框架通过**Hooker类（镜像类**实现方法Hook/字段访问，这些类以声明方式描述目标。系统自动推断目标方法/字段，并允许与Hook的类进行无缝交互。与传统基于反射的方法不同，它在保持安全性和兼容性的同时，消除了反射和构建参数，校验等额外开销。
 
@@ -28,16 +28,23 @@ Albatross 遵循以下设计目标：
 - **批量操作**：基于事务的Hook，自动解决依赖关系
 - **零反射设计**：直接调用方法和访问字段，无反射开销,调用没有额外开销。
 - **延迟Hook**：不用考虑类加载时机,对于加壳的app非常有用。
-- **Native Hook**：Hook native（C/C++）库中的函数（`qing.albatross.nativehook`，3.6.0新增）。
+- **Native Hook**：Hook native（C/C++）库中的函数（`qing.albatross.nativehook`，3.6.0新增；4.0.0扩展延迟Hook、CModule/NativeFunction 与 Stalker）。
+- **动态 Java Hook**：`Albatross.hookMethod(Member, MethodHookCallback)` 可在任意方法上安装 before/after 回调，无需预先生成镜像类。
+- **进程内 CModule**：`CModule` 用 tcc 在运行时编译 C 代码；`NativeFunction` 按签名调用编译函数或任意 native 地址。
+- **代码追踪**：`Stalker` 提供指令级追踪，支持 CALL/RET/EXEC/BLOCK/COMPILE 事件、transformer 与寄存器级 callout。
+- **Java 方法追踪**：`ocean` 模块（`OceanTracker`/`OceanSinker`）追踪方法调用、返回与字段读写，内置 keyword/string/default sinker。
+- **异步 RPC**：`@AsyncRpc` 把耗时 RPC 方法放到工作线程，不占用 agent 的 epoll 循环。
+- **16KB 页支持**：native 库按 Android 15+ 16KB 页设备对齐。
 - **功能强大**：既可用作Hook库，也可以作为反射替代方案（零反射开销)。
 - **易于开发**：构建镜像类和自动推导简化了复杂的Hook逻辑
 
 ### 平台支持
 - **安卓版本**：
-  - 全面支持：API 26-36（8.0-16）
-  - 指令Hook：API 24-36（7.0-16）
-  - 字段访问：API 26-36（8.0-16），8.0以下因Dex优化限制，字段访问被禁用。
-  - 方法Hook：API 24-36（7.0-16）
+  - 4.0.0 已验证：API 29、30、34、35、37（x86、x86_64、arm64，含 16KB 页设备）；API 24-28 使用同一兼容路径
+  - 全面支持：API 26-37（8.0-17）
+  - 指令Hook：API 24-37（7.0-17）
+  - 字段访问：API 26-37（8.0-17），8.0以下因Dex优化限制，字段访问被禁用。
+  - 方法Hook：API 24-37（7.0-17）
   - ❌ 不支持：API 23 及以下（6.0 Marshmallow 及更早版本）
   - 集成: 需要保证目标应用进程没有Lsposed环境,使用frida注入需要清除掉frida的java环境
 - **架构**：x86、x86_64、ARM、ARM64
@@ -74,16 +81,28 @@ Albatross 遵循以下设计目标：
 核心模块提供了Albatross Android框架的基本功能。它包含`Albatross`类，该类提供了各种与Hook相关的方法，如方法Hook、备份和字段备份。
 
 ### `server`
-该模块负责rpc调用，用于和沙箱通信。
+RPC 服务端/客户端实现，包括用于耗时方法的 `@AsyncRpc` 异步派发。
+
+### `ocean`
+Java 方法追踪模块（`qing.albatross.tracker`）：`OceanTracker`、`OceanSinker`、事件类型、内置 keyword/string/default sinker 与 `OceanLogger`。
 
 ### `demo`
-演示模块用于展示Albatross Android框架的功能。它包含用于测试Hook功能。通过连续点击“加载”按钮进行测试。
+演示与回归测试模块，包含 `TestRunner`/`TestSuiteRunner`，覆盖 Java Hook、Native Hook、CModule、Stalker 与 Ocean trace。
 
 ### `app`
-用于Albatross测试的安卓应用。
+演示应用（applicationId `qing.albatross.demo64`）。
 
 ### `app32`
-与`app`模块类似，用于测试32位的架构（arm,x86）。
+32 位演示应用（applicationId `qing.albatross.demo32`）。
+
+## 4.0.0 新增内容
+
+- **动态 Java 方法 Hook**：`Albatross.hookMethod` 可在任意 `Member` 上安装 before/after 回调，无需镜像类。
+- **CModule / NativeFunction**：进程内 tcc 编译 C 代码，并按签名调用 native 函数。
+- **Stalker**：支持按函数/符号追踪、CALL/RET/EXEC/BLOCK/COMPILE 事件、块变换与寄存器读写。
+- **Ocean tracer**：`OceanTracker`/`OceanSinker` 追踪 Java 调用、返回与字段读写。
+- **异步 RPC**：`@AsyncRpc` 标记耗时 RPC 方法。
+- **Native Hook 与稳定性**：延迟 native Hook、`NativeCpuContext`、16KB 页对齐、`HookRecord` 布局同步，以及 x86 32 位 release 的 `Thread::DecodeObject` 修复。
 
 ## 使用示例
 ### 初始化
@@ -308,7 +327,7 @@ public static void test() throws AlbatrossErr {
 
 ```
 
-### 6. Native Hook（v3.6.0+）
+### 6. Native Hook（3.6.0+，4.0.0 扩展）
 
 使用新增的 `qing.albatross.nativehook` 包Hook native（C/C++）库中的函数：
 
@@ -317,10 +336,15 @@ public static void test() throws AlbatrossErr {
 @TargetLibrary("log")
 public class LiblogH {
   @Symbol("__android_log_print")
-  static long logPrint;
+  static long logPrintAddr;
 
   @FuncBackup("__android_log_print")
   private static native int logPrintBackup(int prio, String tag, String msg);
+
+  @FuncHook("__android_log_print")
+  static int logPrint(int prio, String tag, String msg) {
+    return logPrintBackup(prio, tag, "hooked: " + msg);
+  }
 }
 
 AlbNative.hookNative(LiblogH.class, "log");
@@ -330,6 +354,90 @@ DlInfo lib = AlbNative.openLib("libc.so");
 if (lib != null) {
   long mallocAddr = lib.getSymbolAddress("malloc");
   lib.close();
+}
+```
+
+### 7. 动态 Java 方法 Hook
+
+```java
+Method target = Target.class.getDeclaredMethod("compute", int.class);
+MethodCallHook hook = Albatross.hookMethod(target, new MethodHookCallback() {
+  @Override
+  public boolean beforeCall(CallFrame frame) {
+    int v = frame.getParamInt(0);
+    frame.setParamInt(0, v + 1);
+    return true; // 返回 false 可跳过原方法
+  }
+
+  @Override
+  public void afterCall(CallFrame frame) {
+    Object result = frame.getResult();
+  }
+});
+
+// hook.addHook(anotherCallback);
+// hook.unHook();
+```
+
+### 8. CModule 与 NativeFunction
+
+```java
+CModule cm = CModule.compile(
+    "#include <albatross.h>\n"
+    + "int add(int a, int b) { return a + b; }");
+NativeFunction add = cm.getFunction("add", Const.ARG_INT, Const.ARG_INT);
+int result = (Integer) add.call(2, 3); // 5
+cm.close();
+```
+
+CModule 支持 `alb_module_init` / `alb_module_fini` 生命周期回调、编译缓存与外部符号注入；`NativeFunction` 也可直接调用任意 native 地址。
+
+### 9. Stalker 代码追踪
+
+```java
+StalkerConfig config = new StalkerConfig()
+    .call(true).ret(true).block(true)
+    .timeout(5000).maxEvents(200000);
+config.eventListener = events -> {
+  for (StalkerEvent e : events) {
+    if (e.type == StalkerEvent.Type.CALL)
+      Log.d("Stalker", "call " + e.location + " -> " + e.target);
+  }
+};
+StalkerFollowHandle handle =
+    Stalker.followSymbol("libtarget.so", "target_func", config);
+targetFunction();
+handle.unhook();
+```
+
+`StalkerIterator`/`StalkerTransformer` 可丢弃指令或插入 `StalkerCallout`，通过 `NativeCpuContext` 读写寄存器。`followThread` 仍为实验性，优先使用 `followFunction`/`followSymbol`/`followCurrentThread`。
+
+### 10. Ocean Java 方法追踪
+
+```java
+OceanTracker.init(0);
+OceanTracker.setTraceTimeout(5000);
+OceanTracker.setTraceMaxEvents(200000);
+OceanTracker.traceMe(new OceanSinker() {
+  @Override
+  public void call(MethodCallContext context, Member member) {
+    Log.d("Ocean", "call " + member);
+  }
+}, EventType.CALL);
+
+// ... 被追踪的代码 ...
+
+OceanTracker.stopTraceMe();
+```
+
+Ocean 还提供 `KeyWordSinker`/`StringSinker`/`DefaultSinker`、字段读写回调、包白名单与 `OceanLogger`。
+
+### 11. 异步 RPC
+
+```java
+@AsyncRpc
+public void dumpAll(String outputPath) {
+  // 耗时或可能阻塞的 RPC：agent 会放到工作线程执行，不占用 epoll 循环
 }
 ```
 
@@ -343,7 +451,7 @@ if (lib != null) {
 - **代码分析**：通过指令跟踪和分析运行逻辑
 
 ## 未来计划
-潜在功能包括~~Java指令Hook~~、Java代码追踪、动态Hook（单个方法可Hook多个类的方法）、~~调用链Hook~~和取消Hook能力。然而，由于精力限制，这些功能的实现将根据用户反馈进行优先级排序。
+4.0.0 已实现 Java 指令 Hook、Java 方法追踪、动态 Java Hook、CModule/Stalker 与取消 Hook。剩余工作包括 arm32/arm64 跨线程 `followThread` 后端、更多厂商/API 验证（尤其 16KB 页与 32 位 ROM）以及更多示例和文档。
 更多工具和文档将随后推出。敬请关注`albatross-server`、`albatross-core`、`albatross-manager`等项目的更新！
 
 ## 致谢
@@ -370,6 +478,8 @@ Apache许可证2.0
 
 ## 相关文档
 
+- [完整 API 参考](api_documentation.md) — 4.0.0 完整 API
 - [注解参考](docs/annotatin_reference_CN.md) — 注解使用文档
-- [API参考](docs/api_documentation_CN.md) — 核心API用法
+- [API参考（旧版布局）](docs/api_documentation_CN.md) — 核心API用法
 - [异常处理](docs/exception_documentation_CN.md) — 异常说明以及修复文档
+- [Changelog](Changelog) — 版本更新记录

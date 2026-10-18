@@ -50,6 +50,8 @@ Albatross提供了丰富的注解来定义方法和构造函数的Hook和备份�
 | `@ConstructorBackup`    | 备份构造函数 |
 | `@ConstructorHookBackup`| `@ConstructorHook`和`@ConstructorBackup`的组合 |
 
+免签名的动态 Hook 使用 `Albatross.hookMethod(Member, MethodHookCallback)`，回调为 `MethodHookCallback`（`beforeCall`/`afterCall(CallFrame)`）。框架内部用 `DynMethodStubs`/`DynStaticMethodStubs` 生成 stub；声明式镜像类 Hook 使用 `@MethodHook`。
+
 ### 通用注解属性：
 | 属性        | 类型            | 描述                                            |
 |-------------|-----------------|------------------------------------------------|
@@ -159,9 +161,9 @@ static class ServiceH {
 
 ---
 
-## Native Hook 注解（v3.6.0+）
+## Native Hook 注解（3.6.0+，4.0.0 扩展）
 
-Albatross 3.6.0 新增了由 `qing.albatross.nativehook.AlbNative` 驱动的 native（C/C++）库Hook支持。以下注解用于声明native Hook目标：
+Albatross 3.6.0 新增了由 `qing.albatross.nativehook.AlbNative` 驱动的 native（C/C++）库Hook支持。4.0.0 新增 `@FuncHook`、延迟 Hook（`hookNativeDelayed`）、CModule/NativeFunction 与 Stalker。以下注解用于声明 native Hook 目标：
 
 ### `@TargetLibrary`
 放在Hooker类上，声明要加载的native库（`.so`）。值为库名，**不含** `lib` 前缀和 `.so` 后缀。
@@ -180,7 +182,7 @@ public class LiblogH {
 @TargetLibrary("log")
 public class LiblogH {
   @Symbol("__android_log_print")
-  static long logPrint;
+  static long logPrintAddr;
 }
 ```
 
@@ -192,6 +194,22 @@ public class LiblogH {
 public class LiblogH {
   @FuncBackup("__android_log_print")
   private static native int logPrint(int prio, String tag, String msg);
+}
+```
+
+### `@FuncHook`
+放在替换 native 函数的 Java 方法上；对应的 `@FuncBackup` native 方法提供原函数，`AlbNative.hookNative` 与 `AlbNative.hookNativeDelayed` 负责安装替换。当 Java 方法名与 native 符号名不同时，用 `value()` 指定符号（如 `@FuncHook("__android_log_print")`）。
+
+```java
+@TargetLibrary("api")
+class ApiHooker {
+  @FuncBackup
+  static native int getInt$Backup(int v);
+
+  @FuncHook
+  static int getInt(int v) {
+    return getInt$Backup(v + 1);
+  }
 }
 ```
 
@@ -211,6 +229,7 @@ private static native long readCounter(int base);
 - **`@ByName`** — `@Target(FIELD, METHOD)`，`String value()`，`boolean onlyAnno()`。按名字匹配目标成员。
 - **`@ExecutionMode`** — `@Target(METHOD)`，`int value()`（默认`NATIVE_CODE`）。设置单个方法的执行模式。
 - **`@CallWay`** — 常量类：`ORIGIN=0`、`CURRENT=1`、`MIRROR=2`。定义备份方法如何调用原始方法。
+- **`@AsyncRpc`** — `qing.albatross.server.AsyncRpc`，`@Target(METHOD)`。标记 RPC 方法异步执行：agent 将其交给工作线程，耗时/阻塞调用不会占用 epoll 循环。
 
 ---
 

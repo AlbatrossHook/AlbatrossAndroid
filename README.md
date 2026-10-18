@@ -4,7 +4,7 @@
 ----------------
 
 ## Overview
-**Albatross Android** is a high-performance, low-impact hooking and reflection framework designed for Android systems (Android 7.0 - Android 16 Baklava Preview). It is part of the broader **Albatross** ecosystem (including Albatross Server, Core, Manager, etc.), originally named after a nostalgic VR project from the developer's university days.
+**Albatross Android** is a high-performance, low-impact hooking and reflection framework designed for Android systems (Android 7.0+, API 24+; the 4.0.0 release is tested through Android 17 / API 37, including 16 KB page-size devices). It is part of the broader **Albatross** ecosystem (including Albatross Server, Core, Manager, etc.), originally named after a nostalgic VR project from the developer's university days.
 
 The framework enables method hook/field access through **Hooker classes (mirror classes)** that declaratively describe targets. The system automatically deduces target methods/fields and allows seamless interaction with hooked classes. Unlike traditional reflection-based approaches, it eliminates performance overhead while maintaining safety and compatibility.
 
@@ -31,16 +31,23 @@ Albatross adheres to the following design goals:
 - **Batch Operations**: Transaction-based hooking with automatic dependency resolution
 - **Zero-Reflection Design**: Direct method invocation and field access without reflection overhead
 - **Pending Hooks**: Automatically hooks classes when new DEX load.
-- **Native Hook**: Hook C/C++ functions in native libraries (`qing.albatross.nativehook`, new in 3.6.0).
+- **Native Hook**: Hook C/C++ functions in native libraries (`qing.albatross.nativehook`, new in 3.6.0; extended in 4.0.0 with delayed hooks, CModule/NativeFunction and Stalker).
+- **Dynamic Java Hooks**: `Albatross.hookMethod(Member, MethodHookCallback)` installs before/after hooks on arbitrary methods without pre-generated mirror classes.
+- **In-Process C Modules**: `CModule` compiles C with tcc at runtime; `NativeFunction` calls compiled or arbitrary native addresses with a declared signature.
+- **Code Tracing**: `Stalker` exposes instruction-level tracing with call/ret/exec/block/compile events, transformers and register-level callouts.
+- **Java Method Tracing**: the `ocean` module (`OceanTracker`/`OceanSinker`) traces calls, returns and field access, with keyword/string/default sinkers.
+- **Async RPC**: `@AsyncRpc` moves long-running RPC methods off the agent's epoll loop onto worker threads.
+- **16 KB Page Support**: native libraries are aligned for Android 15+ 16 KB page-size devices.
 - **Multi-Use**: Functions as both hooking library and high-performance reflection alternative.
 - **Easy Deployment**: Mirror-class  simplifies complex hooking logic
 
 ###  Platform Support
 - **Android Versions**:
-    - Full support: API 26-36 (8.0-16)
-    - Instruction hook: API 24-36 (7.0-16)
-    - Method hook: API 24-36 (7.0-16)
-    - File access: API 26-36 (8.0-16)
+    - Tested in 4.0.0: API 29, 30, 34, 35 and 37 (x86, x86_64, arm64; including 16 KB page-size devices); API 24-28 use the same compatibility paths
+    - Full support: API 26-37 (8.0-17)
+    - Instruction hook: API 24-37 (7.0-17)
+    - Method hook: API 24-37 (7.0-17)
+    - Field access: API 26-37 (8.0-17)
     - ❌ Unsupported: API 23 and below (6.0 Marshmallow and earlier)
     - Integration: It is necessary to ensure that the target application process does not have an Lsposed environment. When using frida injection, the java environment of frida needs to be cleared
 - **Architectures**: x86, x86_64, ARM, ARM64
@@ -78,17 +85,29 @@ This module  contains annotations used throughout the project. Annotations can b
 ### `core`
 The core module provides the fundamental functionality of the Albatross Android framework. It contains the `Albatross` class, which offers various hooking - related methods such as method hooking, backup, and field backup.
 
-### `server` 
-This module is responsible for rpc call.
+### `server`
+RPC server/client implementation, including `@AsyncRpc` dispatch for long-running methods.
+
+### `ocean`
+Java method-tracing module (`qing.albatross.tracker`): `OceanTracker`, `OceanSinker`, event types, built-in keyword/string/default sinkers and `OceanLogger`.
 
 ###  `demo` 
-The demo module is used to demonstrate the functionality of the Albatross Android framework. It contains Java source files for testing hooking functions.Please note, test by continuously clicking the "load" button.
+The demo module is used to demonstrate the functionality of the Albatross Android framework. It contains the regression tests (`TestRunner`/`TestSuiteRunner`) and runnable examples for Java hooks, native hooks, CModule, Stalker and Ocean tracing.
 
 ### `app` 
-Android application for Albatross test.
+Demo application (applicationId `qing.albatross.demo64`).
 
 ### `app32` 
- Similar to the `app` module, but specifically configured for 32 - bit Android applications.
+32-bit demo application (applicationId `qing.albatross.demo32`).
+
+## What's New in 4.0.0
+
+- **Dynamic Java method hooks** — install before/after callbacks on any `Member` with `Albatross.hookMethod`; no mirror class required.
+- **CModule / NativeFunction** — compile C in-process with tcc and call native functions by signature.
+- **Stalker** — follow functions/symbols, consume CALL/RET/EXEC/BLOCK/COMPILE events, transform blocks and read/write registers.
+- **Ocean tracer** — trace Java calls, returns and field access with `OceanTracker`/`OceanSinker`.
+- **Async RPC** — mark slow RPC methods with `@AsyncRpc`.
+- **Native-hook and stability updates** — delayed native hooks, `NativeCpuContext`, 16 KB page alignment, `HookRecord` layout sync and the x86 32-bit release `Thread::DecodeObject` fix.
 
 ## Usage Example
 ### 1. Hook activity method and access field.
@@ -292,7 +311,7 @@ public static void test() throws AlbatrossErr {
 
 ```
 
-### 6. Native Hook (v3.6.0+)
+### 6. Native Hook (3.6.0+, extended in 4.0.0)
 
 Hook C/C++ functions in native libraries with the new `qing.albatross.nativehook` package:
 
@@ -301,10 +320,15 @@ Hook C/C++ functions in native libraries with the new `qing.albatross.nativehook
 @TargetLibrary("log")
 public class LiblogH {
   @Symbol("__android_log_print")
-  static long logPrint;
+  static long logPrintAddr;
 
   @FuncBackup("__android_log_print")
   private static native int logPrintBackup(int prio, String tag, String msg);
+
+  @FuncHook("__android_log_print")
+  static int logPrint(int prio, String tag, String msg) {
+    return logPrintBackup(prio, tag, "hooked: " + msg);
+  }
 }
 
 AlbNative.hookNative(LiblogH.class, "log");
@@ -314,6 +338,91 @@ DlInfo lib = AlbNative.openLib("libc.so");
 if (lib != null) {
   long mallocAddr = lib.getSymbolAddress("malloc");
   lib.close();
+}
+```
+
+### 7. Dynamic Java method hook
+
+```java
+Method target = Target.class.getDeclaredMethod("compute", int.class);
+MethodCallHook hook = Albatross.hookMethod(target, new MethodHookCallback() {
+  @Override
+  public boolean beforeCall(CallFrame frame) {
+    int v = frame.getParamInt(0);
+    frame.setParamInt(0, v + 1);
+    return true; // return false to skip the original method
+  }
+
+  @Override
+  public void afterCall(CallFrame frame) {
+    Object result = frame.getResult();
+  }
+});
+
+// hook.addHook(anotherCallback);
+// hook.unHook();
+```
+
+### 8. CModule & NativeFunction
+
+```java
+CModule cm = CModule.compile(
+    "#include <albatross.h>\n"
+    + "int add(int a, int b) { return a + b; }");
+NativeFunction add = cm.getFunction("add", Const.ARG_INT, Const.ARG_INT);
+int result = (Integer) add.call(2, 3); // 5
+cm.close();
+```
+
+CModule supports `alb_module_init` / `alb_module_fini` lifecycle callbacks, compile caching and external symbol injection; `NativeFunction` can also call arbitrary native addresses.
+
+### 9. Stalker code tracing
+
+```java
+StalkerConfig config = new StalkerConfig()
+    .call(true).ret(true).block(true)
+    .timeout(5000).maxEvents(200000);
+config.eventListener = events -> {
+  for (StalkerEvent e : events) {
+    if (e.type == StalkerEvent.Type.CALL)
+      Log.d("Stalker", "call " + e.location + " -> " + e.target);
+  }
+};
+StalkerFollowHandle handle =
+    Stalker.followSymbol("libtarget.so", "target_func", config);
+targetFunction();
+handle.unhook();
+```
+
+Transformers (`StalkerIterator`/`StalkerTransformer`) can drop instructions or insert `StalkerCallout` callbacks that read/write registers through `NativeCpuContext`. `followThread` is still experimental; prefer `followFunction`/`followSymbol`/`followCurrentThread`.
+
+### 10. Ocean Java method tracing
+
+```java
+OceanTracker.init(0);
+OceanTracker.setTraceTimeout(5000);
+OceanTracker.setTraceMaxEvents(200000);
+OceanTracker.traceMe(new OceanSinker() {
+  @Override
+  public void call(MethodCallContext context, Member member) {
+    Log.d("Ocean", "call " + member);
+  }
+}, EventType.CALL);
+
+// ... traced code ...
+
+OceanTracker.stopTraceMe();
+```
+
+Ocean also provides `KeyWordSinker`/`StringSinker`/`DefaultSinker`, field read/write callbacks, package whitelists and `OceanLogger`.
+
+### 11. Async RPC
+
+```java
+@AsyncRpc
+public void dumpAll(String outputPath) {
+  // Slow or potentially blocking RPC work; the agent runs it on a worker thread
+  // instead of the single epoll loop.
 }
 ```
 
@@ -329,7 +438,7 @@ if (lib != null) {
 - **Code analysis**:Tracking and analyzing the running logic through instructions
 
 ##  Future Plans
-Potential features include ~~Java instruction hooking~~, Java code tracing, dynamic hooking (where a single method can hook methods from multiple classes), ~~call chain hooking~~, and unhooking capabilities. However, due to resource limitations, the implementation of these features will be prioritized based on user feedback.
+4.0.0 delivers Java instruction hooking, Java method tracing, dynamic Java hooks, CModule/Stalker and unhooking. Remaining work includes the arm32/arm64 cross-thread `followThread` stalker backends, broader vendor/API validation (notably 16 KB page devices and 32-bit ROMs), and more examples and documentation.
 More tools and documentation will follow. Stay tuned for updates on `albatross-server`, `albatross-core`,`albatross-manager` and more!
 
 
@@ -361,6 +470,8 @@ Topics we discuss include:
 
 ##  Related Documentation
 
+- [API Reference (full)](api_documentation.md) — Complete 4.0.0 API reference
 - [Annotations](docs/annotatin_reference_EN.md) — Full list of hooking and configuration annotations
-- [API Reference](docs/api_documentation_EN.md) — Public methods and usage
+- [API Reference (legacy layout)](docs/api_documentation_EN.md) — Public methods and usage
 - [Exception Handling](docs/exception_documentation_EN.md) — Error types and fix strategies
+- [Changelog](Changelog) — Release history

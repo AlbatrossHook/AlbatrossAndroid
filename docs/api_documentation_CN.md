@@ -1,5 +1,7 @@
 # Albatross API 文档
 
+**版本：4.0.0**
+
 ---
 
 ## 目录
@@ -11,10 +13,11 @@
 5. [字段操作](#字段操作)
 6. [事务管理](#事务管理)
 7. [指令Hook](#指令hook)
-8. [方法调用Hook](#方法调用hook)
+8. [动态方法Hook](#动态方法hook)
 9. [工具方法](#工具方法)
-10. [Native Hook](#native-hook)
-11. [使用示例](#使用示例)
+10. [Native Hook (3.6.0+, extended in 4.0.0)](#native-hook-360-extended-in-400)
+11. [4.0.0 新增内容](#400-新增内容)
+12. [使用示例](#使用示例)
 
 ---
 
@@ -314,18 +317,18 @@ public static void insHookInit();
 
 ---
 
-## 方法调用Hook
+## 动态方法Hook
 
 ### `hookMethod`
 ```java
-public static MethodCallHook hookMethod(Member member, MethodCallback callback, int compile);
+public static MethodCallHook hookMethod(Member member, MethodHookCallback callback);
 ```
-**功能**: 方法调用级Hook——每次目标方法被调用时回调，无需声明Hooker类  
+**功能**: 动态方法Hook——每次目标方法被调用时回调，无需声明Hooker类  
 **参数**:
 - `member`: 目标方法
-- `callback`: `MethodCallback` 回调（`Object call(CallFrame)`）
-- `compile`: 编译选项  
-**返回**: `MethodCallHook` 实例，可调用 `unHook()` 取消
+- `callback`: `MethodHookCallback`（`beforeCall(CallFrame)` / `afterCall(CallFrame)`）
+- `beforeCall` 可读写参数、返回 `false` 跳过原方法，或设置结果/异常；`afterCall` 可读取或改写结果
+**返回**: `MethodCallHook` 实例，支持 `addHook(MethodHookCallback)` 与 `unHook()`
 
 ---
 
@@ -461,9 +464,9 @@ public synchronized static void disableLog();
 
 ---
 
-## Native Hook
+## Native Hook (3.6.0+, extended in 4.0.0)
 
-`qing.albatross.nativehook` 包提供了 native（C/C++）库Hook能力。
+`qing.albatross.nativehook` 包提供了 native（C/C++）库Hook能力。4.0.0 新增延迟 Hook（`hookInstructionDelayed`/`hookNativeDelayed`）、`NativeCpuContext`、`@FuncHook`、CModule/NativeFunction 与 Stalker；见 [4.0.0 新增内容](#400-新增内容)。
 
 ### `AlbNative`
 ```java
@@ -533,6 +536,20 @@ libc 常用函数（`open`、`read`、`write`、`close`、`malloc`、`free` 等�
 
 ---
 
+## 4.0.0 新增内容
+
+本文档覆盖核心 API。4.0.0 新增：
+
+- **动态 Java 方法 Hook**：`Albatross.hookMethod(Member, MethodHookCallback)`，`CallFrame` 提供 before/after 回调；`MethodCallHook` 支持 `addHook`/`unHook`。
+- **CModule / NativeFunction**：`CModule.compile(...)`、`getAddress`/`hasSymbol`/`getFunction`/`close`；`NativeFunction(address, retType, argTypes...).call(...)`；`alb_module_init`/`alb_module_fini` 生命周期；编译缓存；`CModuleCompileException`。
+- **Stalker**：`followFunction`/`followSymbol`/`followCurrentThread`、CALL/RET/EXEC/BLOCK/COMPILE 事件、`StalkerConfig`、`StalkerIterator`/`StalkerTransformer`/`StalkerCallout`、include/exclude、超时/事件上限/停止原因。`followThread` 仍为实验性，arm32 不支持 `putCallout`。
+- **Ocean tracer**：`OceanTracker`/`OceanSinker`/`EventType`、`KeyWordSinker`/`StringSinker`/`DefaultSinker`、`OceanLogger`、trace 窗口与包白名单。
+- **异步 RPC**：`@AsyncRpc`（`qing.albatross.server`）与异步 `registerMethod`，用于耗时 RPC。
+- **延迟 native Hook**：`AlbNative.hookInstructionDelayed`/`hookNativeDelayed`、`DelayedHookRecord`、`NativeCpuContext`、`@FuncHook`。
+- **稳定性**：16KB 页对齐、`HookRecord.hookWay` 布局同步、x86 32 位 release 的 `Thread::DecodeObject` 内联汇编修复。
+
+完整用法见 [api_documentation.md](../api_documentation.md)。
+
 ## 使用示例
 
 ### 示例1: 基本Hook
@@ -555,7 +572,7 @@ Albatross.hookClass(ActivityHooker.class);
 Method targetMethod = MyClass.class.getDeclaredMethod("targetMethod");
 boolean ok = Albatross.hookInstruction(targetMethod, 0, 10, new InstructionListener() {
     @Override
-    public void onEnter(int dexPc, InvocationContext invocationContext) {
+    public void onEnter(Member method, Object self, int dexPc, InvocationContext invocationContext) {
         Log.d("Albatross", "Instruction at dexPc: " + dexPc);
     }
 });
@@ -590,7 +607,7 @@ public class TargetHooker {
 }
 ```
 
-### 示例5: Native Hook
+### 示例5: Native Hook（3.6.0+，4.0.0 扩展）
 ```java
 // 打开动态库并查找符号
 DlInfo lib = AlbNative.openLib("libc.so");
@@ -604,10 +621,15 @@ if (lib != null) {
 @TargetLibrary("log")
 class LiblogH {
     @Symbol("__android_log_print")
-    static long logPrint;
+    static long logPrintAddr;
 
     @FuncBackup("__android_log_print")
     private static native int logPrintBackup(int prio, String tag, String msg);
+
+    @FuncHook("__android_log_print")
+    static int logPrint(int prio, String tag, String msg) {
+        return logPrintBackup(prio, tag, "hooked: " + msg);
+    }
 }
 AlbNative.hookNative(LiblogH.class, "log");
 ```

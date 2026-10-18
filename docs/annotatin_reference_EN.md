@@ -52,6 +52,8 @@ Albatross provides a rich set of annotations to define hooking and backup logic 
 | `@ConstructorBackup`    | Backs up a constructor |
 | `@ConstructorHookBackup`| Combination of `@ConstructorHook` and `@ConstructorBackup` |
 
+For signature-free dynamic hooks, use `Albatross.hookMethod(Member, MethodHookCallback)` with a `MethodHookCallback` (`beforeCall`/`afterCall(CallFrame)`). The framework uses `DynMethodStubs`/`DynStaticMethodStubs` internally for generated stubs; declarative mirror-class hooks use `@MethodHook`.
+
 ### Common Annotation Attributes:
 | Attribute        | Type            | Description                                            |
 |------------------|-----------------|--------------------------------------------------------|
@@ -164,9 +166,9 @@ static class ServiceH {
 
 ---
 
-## Native Hook Annotations (v3.6.0+)
+## Native Hook Annotations (3.6.0+, extended in 4.0.0)
 
-Albatross 3.6.0 adds native (C/C++) library hooking support driven by `qing.albatross.nativehook.AlbNative`. The following annotations declare the native hook targets:
+Albatross 3.6.0 adds native (C/C++) library hooking support driven by `qing.albatross.nativehook.AlbNative`. 4.0.0 adds `@FuncHook`, delayed hooks (`hookNativeDelayed`), CModule/NativeFunction and Stalker. The following annotations declare the native hook targets:
 
 ### `@TargetLibrary`
 Placed on the hooker class to declare which native library (`.so`) to load. The value is the library name **without** the `lib` prefix and `.so` suffix.
@@ -185,7 +187,7 @@ Placed on a `long` field to declare a native symbol. When `AlbNative.hookNative(
 @TargetLibrary("log")
 public class LiblogH {
   @Symbol("__android_log_print")
-  static long logPrint;
+  static long logPrintAddr;
 }
 ```
 
@@ -197,6 +199,22 @@ Placed on a native method to back up a native function. The value is the symbol 
 public class LiblogH {
   @FuncBackup("__android_log_print")
   private static native int logPrint(int prio, String tag, String msg);
+}
+```
+
+### `@FuncHook`
+Placed on the Java method that replaces a native function. The matching `@FuncBackup` native method supplies the original function; `AlbNative.hookNative` and `AlbNative.hookNativeDelayed` install the replacement. Use `value()` when the Java method name differs from the native symbol name (e.g. `@FuncHook("__android_log_print")`).
+
+```java
+@TargetLibrary("api")
+class ApiHooker {
+  @FuncBackup
+  static native int getInt$Backup(int v);
+
+  @FuncHook
+  static int getInt(int v) {
+    return getInt$Backup(v + 1);
+  }
 }
 ```
 
@@ -216,6 +234,7 @@ private static native long readCounter(int base);
 - **`@ByName`** — `@Target(FIELD, METHOD)`, `String value()`, `boolean onlyAnno()`. Matches a target member by name.
 - **`@ExecutionMode`** — `@Target(METHOD)`, `int value()` (default `NATIVE_CODE`). Sets the execution mode of a single method.
 - **`@CallWay`** — constants class: `ORIGIN=0`, `CURRENT=1`, `MIRROR=2`. Defines how a backup method invokes the original method.
+- **`@AsyncRpc`** — `qing.albatross.server.AsyncRpc`, `@Target(METHOD)`. Marks an RPC method for asynchronous execution on a worker thread, keeping long-running/blocking calls off the agent's epoll loop.
 
 ---
 

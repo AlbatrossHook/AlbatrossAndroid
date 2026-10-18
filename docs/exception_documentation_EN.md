@@ -1,4 +1,7 @@
 # Albatross Exception Documentation
+
+**Version: 4.0.0**
+
 This document describes the updated exception hierarchy and error handling logic in Albatross framework, focusing on structural validation and required element checks during hooking operations.
 
 Proper exception handling ensures robust hooker implementations and quick issue resolution.
@@ -28,6 +31,8 @@ AlbatrossException
 ├── FieldException (field validation errors)
 └── FindMethodException (ambiguous parameter type resolution)
 ```
+
+`CModuleCompileException` (thrown by `CModule.compile`) extends `RuntimeException`, not `AlbatrossException`.
 ---
 
 
@@ -264,6 +269,12 @@ Indicates invalid hooker design patterns.
 
 ---
 
+### 7. `CModuleCompileException`
+
+Thrown by `CModule.compile` when tcc compilation or module loading fails. The message contains the compiler/loader error. It is a `RuntimeException`; no partially initialized module is returned. Release any external resources you allocated before calling `compile` if you catch it.
+
+---
+
 ## API Exception Contracts
 
 ### `hookClass(Class<?> hooker)`
@@ -283,6 +294,14 @@ public static boolean backupAndHook(Member target, Method hook, Method backup) t
 - **Possible Exceptions**:
   - `MethodException` - Method signature mismatch
   - `VirtualCallBackupErr` - Backup method visibility error
+
+### `hookMethod(Member target, MethodHookCallback callback)`
+```java
+public static MethodCallHook hookMethod(Member target, MethodHookCallback callback)
+```
+- `beforeCall`/`afterCall` may throw `Throwable`; the original method is skipped and the exception propagates to the caller after `afterCall`.
+- Returning `false` from `beforeCall` (or setting a result/throwable) skips the original method.
+- `MethodCallHook.unHook()` is idempotent; use it in a `finally` block when the hook should not outlive the current scope.
 
 ---
 

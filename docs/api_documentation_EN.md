@@ -1,5 +1,7 @@
 # Albatross API Documentation
 
+**Version: 4.0.0**
+
 ---
 
 ## Table of Contents
@@ -11,10 +13,11 @@
 5. [Field Operations](#field-operations)
 6. [Transaction Management](#transaction-management)
 7. [Instruction Hook](#instruction-hook)
-8. [Method-Call Hook](#method-call-hook)
+8. [Dynamic Method Hook](#dynamic-method-hook)
 9. [Utility Methods](#utility-methods)
-10. [Native Hook](#native-hook)
-11. [Usage Examples](#usage-examples)
+10. [Native Hook (3.6.0+, extended in 4.0.0)](#native-hook-360-extended-in-400)
+11. [4.0.0 Additions](#400-additions)
+12. [Usage Examples](#usage-examples)
 
 ---
 
@@ -314,18 +317,18 @@ public static void insHookInit();
 
 ---
 
-## Method-Call Hook
+## Dynamic Method Hook
 
 ### `hookMethod`
 ```java
-public static MethodCallHook hookMethod(Member member, MethodCallback callback, int compile);
+public static MethodCallHook hookMethod(Member member, MethodHookCallback callback);
 ```
-**Method-call-level hook — the callback fires on every invocation of the target method, without declaring a hooker class.**
+**Dynamic method hook — the callback fires on every invocation of the target method, without declaring a hooker class.**
 **Parameters**:
 - `member`: target method
-- `callback`: `MethodCallback` callback (`Object call(CallFrame)`)
-- `compile`: compilation option
-**Returns**: a `MethodCallHook` instance, cancelable via `unHook()`.
+- `callback`: `MethodHookCallback` (`beforeCall(CallFrame)`, `afterCall(CallFrame)`)
+- `beforeCall` may read/write arguments, return `false` to skip the original method, or set a result/throwable; `afterCall` may inspect or replace the result.
+**Returns**: a `MethodCallHook` instance with `addHook(MethodHookCallback)` and `unHook()`.
 
 ---
 
@@ -456,9 +459,9 @@ public synchronized static void disableLog();
 
 ---
 
-## Native Hook
+## Native Hook (3.6.0+, extended in 4.0.0)
 
-The `qing.albatross.nativehook` package provides native (C/C++) library hooking capabilities.
+The `qing.albatross.nativehook` package provides native (C/C++) library hooking capabilities. 4.0.0 adds delayed hooks (`hookInstructionDelayed`/`hookNativeDelayed`), `NativeCpuContext`, `@FuncHook`, CModule/NativeFunction and Stalker; see [4.0.0 Additions](#400-additions).
 
 ### `AlbNative`
 ```java
@@ -528,6 +531,20 @@ A wrapper around common libc functions (`open`, `read`, `write`, `close`, `mallo
 
 ---
 
+## 4.0.0 Additions
+
+This page documents the core API. 4.0.0 adds:
+
+- **Dynamic Java method hooks** — `Albatross.hookMethod(Member, MethodHookCallback)` with `CallFrame` before/after callbacks; `MethodCallHook` supports `addHook`/`unHook`.
+- **CModule / NativeFunction** — `CModule.compile(...)`, `getAddress`/`hasSymbol`/`getFunction`/`close`; `NativeFunction(address, retType, argTypes...).call(...)`; lifecycle callbacks `alb_module_init`/`alb_module_fini`; compile cache; `CModuleCompileException`.
+- **Stalker** — `followFunction`/`followSymbol`/`followCurrentThread`, event types CALL/RET/EXEC/BLOCK/COMPILE, `StalkerConfig`, `StalkerIterator`/`StalkerTransformer`/`StalkerCallout`, include/exclude, timeout/max-events/stop reason. `followThread` is experimental and arm32 `putCallout` is unsupported.
+- **Ocean tracer** — `OceanTracker`/`OceanSinker`/`EventType`, `KeyWordSinker`/`StringSinker`/`DefaultSinker`, `OceanLogger`, trace windows and package whitelists.
+- **Async RPC** — `@AsyncRpc` (`qing.albatross.server`) and async `registerMethod` for long-running RPC methods.
+- **Delayed native hooks** — `AlbNative.hookInstructionDelayed`/`hookNativeDelayed`, `DelayedHookRecord`, `NativeCpuContext`, and the `@FuncHook` annotation.
+- **Stability** — 16 KB page alignment, `HookRecord.hookWay` layout sync, and the x86 32-bit release `Thread::DecodeObject` inline-asm fix.
+
+See [api_documentation.md](../api_documentation.md) for the full 4.0.0 reference, including examples.
+
 ## Usage Examples
 
 ### Example 1: Basic Hook
@@ -585,7 +602,7 @@ public class TargetHooker {
 }
 ```
 
-### Example 5: Native Hook
+### Example 5: Native Hook (3.6.0+, extended in 4.0.0)
 ```java
 // Open a library and look up a symbol
 DlInfo lib = AlbNative.openLib("libc.so");
@@ -599,10 +616,15 @@ if (lib != null) {
 @TargetLibrary("log")
 class LiblogH {
     @Symbol("__android_log_print")
-    static long logPrint;
+    static long logPrintAddr;
 
     @FuncBackup("__android_log_print")
     private static native int logPrintBackup(int prio, String tag, String msg);
+
+    @FuncHook("__android_log_print")
+    static int logPrint(int prio, String tag, String msg) {
+        return logPrintBackup(prio, tag, "hooked: " + msg);
+    }
 }
 AlbNative.hookNative(LiblogH.class, "log");
 ```

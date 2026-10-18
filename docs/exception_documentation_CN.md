@@ -1,5 +1,7 @@
 # Albatross 异常文档
 
+**版本：4.0.0**
+
 本文档描述了Albatross框架中更新的异常层次结构和错误处理逻辑，重点关注Hook操作期间的结构验证和必需元素检查。
 
 正确的异常处理确保Hooker实现的健壮性和问题的快速解决。
@@ -29,6 +31,8 @@ AlbatrossException
 ├── FieldException (字段验证错误)
 └── FindMethodException (参数类型解析不明确)
 ```
+
+`CModuleCompileException`（`CModule.compile` 抛出）继承 `RuntimeException`，不属于 `AlbatrossException`。
 ---
 
 ## 核心异常
@@ -260,6 +264,12 @@ public class BadHooker {}
 
 ---
 
+### 7. `CModuleCompileException`
+
+`CModule.compile` 在 tcc 编译或模块加载失败时抛出，message 包含编译器/加载器错误。它是 `RuntimeException`，不会返回半初始化的模块；如果在调用 `compile` 前分配了外部资源，捕获后自行释放。
+
+---
+
 ## API异常契约
 
 ### `hookClass(Class<?> hooker)`
@@ -279,6 +289,14 @@ public static boolean backupAndHook(Member target, Method hook, Method backup) t
 - **可能的异常**：
   - `MethodException` - 方法签名不匹配
   - `VirtualCallBackupErr` - 备份方法可见性错误
+
+### `hookMethod(Member target, MethodHookCallback callback)`
+```java
+public static MethodCallHook hookMethod(Member target, MethodHookCallback callback)
+```
+- `beforeCall`/`afterCall` 可抛 `Throwable`；原方法会被跳过，异常在 `afterCall` 之后向调用者传播。
+- `beforeCall` 返回 `false`（或设置结果/异常）会跳过原方法。
+- `MethodCallHook.unHook()` 幂等；不希望 Hook 超出当前作用域时放在 `finally` 中调用。
 
 ---
 
