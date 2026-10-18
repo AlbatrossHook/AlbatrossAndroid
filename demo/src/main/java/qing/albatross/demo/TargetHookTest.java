@@ -1,7 +1,5 @@
 package qing.albatross.demo;
 
-import android.util.Log;
-
 import qing.albatross.annotation.MethodBackup;
 import qing.albatross.annotation.MethodHook;
 import qing.albatross.annotation.ParamInfo;
@@ -83,7 +81,7 @@ public class TargetHookTest {
     private String string(@ParamInfo("java.lang.String") Object s) throws NoSuchMethodException {
       if (stringCallCount++ > 16) {
         long entry = Albatross.entryPointFromQuickCompiledCode(CH.class.getDeclaredMethod("string", Object.class));
-        Albatross.log( "string can not call target method:" + entry);
+        Albatross.log("string can not call target method:" + entry);
       } else if (stringCallCount++ > 18) {
         long entry = Albatross.entryPointFromQuickCompiledCode(C.class.getDeclaredMethod("string", String.class));
         throw new RuntimeException("string can not call target method:" + entry);
@@ -96,7 +94,7 @@ public class TargetHookTest {
     }
   }
 
-  public static void test() throws AlbatrossErr {
+  public static void _test() throws AlbatrossErr {
     C cObj = new C();
     String cs = cObj.string("a");
     assert cs.startsWith("hook:");
@@ -126,19 +124,17 @@ public class TargetHookTest {
     assert Albatross.transactionLevel() == 0;
   }
 
-  public static void main(boolean hook) {
+  public static void test() {
+    Albatross.log("TargetHookTest.begin");
     new A().b(2);
     assert Albatross.transactionLevel() == 0;
     try {
       int res = Albatross.hookClass(CH.class);
-      if (hook)
-        assert res > 2;
-      else
-        assert res == Albatross.CLASS_ALREADY_HOOK;
-      test();
+      assert res == Albatross.CLASS_ALREADY_HOOK || res > 2;
+      _test();
     } catch (AlbatrossErr e) {
       throw new RuntimeException(e);
     }
-
+    Albatross.log("TargetHookTest.end");
   }
 }

@@ -25,5 +25,6 @@ public class HookRecord {
   int targetExec;
   int hookerExec;
   byte backupWay;
-  boolean checkMethSign =false;
+  byte hookWay;
+  boolean checkMethSign = false;
 }

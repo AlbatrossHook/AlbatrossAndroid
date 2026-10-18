@@ -119,7 +119,9 @@ public class UnixRpcServer extends Thread {
         UnixRpcMethodFactory.RpcMethod rpcMethod = entry.getValue();
         Method method = rpcMethod.method;
         if (method.getAnnotation(Broadcast.class) == null) {
-          registerMethod(id, serverObj, rpcMethod.getName(), method, rpcMethod.args, rpcMethod.ret);
+          boolean async = method.getAnnotation(AsyncRpc.class) != null;
+          registerMethod(id, serverObj, rpcMethod.getName(), method, rpcMethod.args,
+              rpcMethod.ret, async);
         } else {
           Method targetMethod = ReflectUtils.findMethod(owner.getClass(), method.getName(), method.getParameterTypes());
           registerBroadcast(serverObj, rpcMethod.getName(), targetMethod, rpcMethod.args, rpcMethod.ret);
@@ -132,7 +134,8 @@ public class UnixRpcServer extends Thread {
     }
   }
 
-  static native byte registerMethod(int instanceId, long serverObj, String name, Object method, byte[] args, byte retType);
+  static native byte registerMethod(int instanceId, long serverObj, String name, Object method, byte[] args,
+                                    byte retType, boolean async);
 
   static native byte registerClientMethod(long serverObj, String name, Object method, byte[] args, byte retType);
 

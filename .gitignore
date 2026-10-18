@@ -14,5 +14,4 @@
 .externalNativeBuild
 .cxx
 local.properties
-release/annotation-release.aar
-release/core-release.aar
+release/

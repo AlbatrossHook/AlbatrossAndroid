@@ -121,7 +121,7 @@ public class AlbatrossDemoMainActivity extends Activity {
   static boolean isLoad = false;
   protected TextView textView;
 
-  public static final int ALBATROSS_NATIVE_VERSION = 6;
+  public static final int ALBATROSS_NATIVE_VERSION = 7;
 
   public void fixLayout() {
     setContentView(R.layout.activity_albatross_demo_main);

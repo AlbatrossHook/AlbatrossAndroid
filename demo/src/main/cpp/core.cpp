@@ -2,6 +2,13 @@
 #include "albatross.h"
 #include <pthread.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include <android/log.h>
 
 extern "C" jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     return JNI_VERSION_1_6;
@@ -53,6 +60,216 @@ Java_qing_albatross_demo_NativeInstructionHookTest_getIntNativeThread(JNIEnv *en
     void *result;
     pthread_join(t, &result);
     return (jint) (long) result;
+}
+
+// ---- NativeHookTest: C 层目标函数 + JNI 直调包装 ----
+// 目标函数保持 C 链接与非 static: FuncHook 按 libapi.so 的符号名找入口。
+
+extern "C" {
+
+int getInt(int v) {
+  printf("enlarge function body");
+  return v + 100;
+}
+
+static int64_t g_addlong_args[2];
+
+int64_t addLong(int64_t a, int64_t b) {
+  g_addlong_args[0] = a;
+  g_addlong_args[1] = b;
+  return a * 1000000L + b;
+}
+
+static char greet_buf[128];
+
+const char *greet(const char *name) {
+  snprintf(greet_buf, sizeof(greet_buf), "hi %s", name);
+  return greet_buf;
+}
+
+static int g_sum10_args[10];
+
+int sum10(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10) {
+  g_sum10_args[0] = a1;
+  g_sum10_args[1] = a2;
+  g_sum10_args[2] = a3;
+  g_sum10_args[3] = a4;
+  g_sum10_args[4] = a5;
+  g_sum10_args[5] = a6;
+  g_sum10_args[6] = a7;
+  g_sum10_args[7] = a8;
+  g_sum10_args[8] = a9;
+  g_sum10_args[9] = a10;
+  return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
+}
+
+static int g_counter = 0;
+
+void bump(int delta) {
+  g_counter += delta;
+}
+
+int getCounter() {
+  return g_counter;
+}
+
+int twice(int v) {
+  return v * 2;
+}
+
+} // extern "C"
+
+extern "C" JNIEXPORT jint JNICALL
+Java_qing_albatross_demo_NativeHookTest_getInt(JNIEnv *env, jclass clazz, jint v) {
+  (void) env;
+  (void) clazz;
+  return getInt(v);
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_qing_albatross_demo_NativeHookTest_getAddLongArg(JNIEnv *env, jclass clazz, jint idx) {
+  (void) env;
+  (void) clazz;
+  if (idx < 0 || idx > 1)
+    return -1;
+  return g_addlong_args[idx];
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_qing_albatross_demo_NativeHookTest_addLong(JNIEnv *env, jclass clazz, jlong a, jlong b) {
+  (void) env;
+  (void) clazz;
+  return addLong(a, b);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_qing_albatross_demo_NativeHookTest_greet(JNIEnv *env, jclass clazz, jstring name) {
+  (void) clazz;
+  const char *n = env->GetStringUTFChars(name, nullptr);
+  const char *r = greet(n);
+  env->ReleaseStringUTFChars(name, n);
+  return env->NewStringUTF(r);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_qing_albatross_demo_NativeHookTest_sum10(JNIEnv *env, jclass clazz, jint a1, jint a2,
+                                              jint a3, jint a4, jint a5, jint a6, jint a7,
+                                              jint a8, jint a9, jint a10) {
+  (void) env;
+  (void) clazz;
+  return sum10(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_qing_albatross_demo_NativeHookTest_getSum10Arg(JNIEnv *env, jclass clazz, jint idx) {
+  (void) env;
+  (void) clazz;
+  if (idx < 0 || idx >= 10)
+    return -1;
+  return g_sum10_args[idx];
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_qing_albatross_demo_NativeHookTest_bump(JNIEnv *env, jclass clazz, jint delta) {
+  (void) env;
+  (void) clazz;
+  bump(delta);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_qing_albatross_demo_NativeHookTest_getCounter(JNIEnv *env, jclass clazz) {
+  (void) env;
+  (void) clazz;
+  return getCounter();
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_qing_albatross_demo_NativeHookTest_twice(JNIEnv *env, jclass clazz, jint v) {
+  (void) env;
+  (void) clazz;
+  return twice(v);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_qing_albatross_demo_NativeInstructionHookTest_getString(JNIEnv *env, jclass clazz, jstring a) {
+  (void) clazz;
+  const char *in = env->GetStringUTFChars(a, nullptr);
+  char temp[128];
+  snprintf(temp, sizeof(temp), "%s:test", in);
+  env->ReleaseStringUTFChars(a, in);
+  return env->NewStringUTF(temp);
+}
+
+// ---- NativeBackupTest 对照层: 纯 JNI 直调(不经 backup) ----
+
+extern "C" JNIEXPORT void JNICALL
+Java_qing_albatross_demo_NativeBackupTest_writeTest(JNIEnv *env, jclass clazz, jstring path) {
+  (void) clazz;
+  const char *s = env->GetStringUTFChars(path, nullptr);
+  int fd = open(s, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+  if (fd > 0) {
+    close(fd);
+  } else {
+    printf("err :%d\n", errno);
+  }
+  env->ReleaseStringUTFChars(path, s);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_qing_albatross_demo_NativeBackupTest_roundTrip(JNIEnv *env, jclass clazz,
+                                                    jstring path, jstring content) {
+  (void) clazz;
+  const char *p = env->GetStringUTFChars(path, nullptr);
+  const char *c = env->GetStringUTFChars(content, nullptr);
+  size_t len = strlen(c);
+  char buf[512];
+  if (len >= sizeof(buf)) {
+    env->ReleaseStringUTFChars(path, p);
+    env->ReleaseStringUTFChars(content, c);
+    return env->NewStringUTF("");
+  }
+  int fd = open(p, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+  if (fd < 0) {
+    env->ReleaseStringUTFChars(path, p);
+    env->ReleaseStringUTFChars(content, c);
+    return nullptr;
+  }
+  ssize_t w = write(fd, c, len);
+  close(fd);
+  fd = open(p, O_RDONLY, 0);
+  if (fd < 0) {
+    env->ReleaseStringUTFChars(path, p);
+    env->ReleaseStringUTFChars(content, c);
+    return nullptr;
+  }
+  ssize_t r = read(fd, buf, sizeof(buf) - 1);
+  close(fd);
+  env->ReleaseStringUTFChars(path, p);
+  env->ReleaseStringUTFChars(content, c);
+  if (w != (ssize_t) len || r != w) {
+    return env->NewStringUTF("");
+  }
+  buf[r] = '\0';
+  return env->NewStringUTF(buf);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_qing_albatross_demo_NativeBackupTest_absDirect(JNIEnv *env, jclass clazz, jint v) {
+  (void) env;
+  (void) clazz;
+  return v < 0 ? -v : v;
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_qing_albatross_demo_NativeBackupTest_strlenDirect(JNIEnv *env, jclass clazz, jstring s) {
+  (void) clazz;
+  const char *c = env->GetStringUTFChars(s, nullptr);
+  jlong r = (jlong) strlen(c);
+  void *sym = dlsym(RTLD_DEFAULT, "strlen");
+  env->ReleaseStringUTFChars(s, c);
+  __android_log_print(ANDROID_LOG_INFO, "albatross",
+                      "DIAG strlenDirect ret=%lld dlsym=%p", (long long) r, sym);
+  return r;
 }
 
 // ---- CModuleTest: 供 CModule 编译出的 C 代码 hook/调用的目标 ----

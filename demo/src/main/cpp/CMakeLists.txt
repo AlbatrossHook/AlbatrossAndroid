@@ -45,5 +45,10 @@ target_link_libraries(api
         albatross_base
         log)
 
+# 16KB 页设备(Android 15+)要求 so 的 LOAD 段按 16KB 对齐；4KB 对齐会被
+# bionic 以 app-compat 模式加载（还会弹 PageSizeMismatchDialog），
+# stalker 的 module 过滤/符号解析在这种映射下会失败。
+target_link_options(api PUBLIC -Wl,-z,max-page-size=16384)
+
 #set_target_properties(albatross PROPERTIES VERSION 1.0 SOVERSION 1)
 #export(TARGETS albatross FILE albatross-config.cmake)
