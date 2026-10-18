@@ -1,5 +1,6 @@
 package qing.albatross.demo;
 
+
 import android.os.Build;
 import android.os.Debug;
 
@@ -134,51 +135,53 @@ public class TestMain {
     }
   }
 
-  public static void main(boolean hook) throws Exception {
-    if (Debug.isDebuggerConnected()) {
-      System.out.println("is debugger connected");
-    }
-    InsHookTest.test();
-    AppVersionTest.test();
-    HookTriggerTest.test();
-    SearchFieldTest.test();
-    SearchCallerTest.test();
-    SafeToStringTest.test();
-    SearchObjectTest.test();
-    UnHookTest2.test();
-    UnHookTest.test();
-//    ExtendImplTest.test();
-    HookChainTest2.test();
-    AotHookChainTest.test();
-    HookChainTest.test();
-    PrimCoarseMatch.test(hook);
-    BinderHook.test(hook);
-    FieldRefTest.test(hook);
-    DisableMethodTest.test(hook);
-    RequiredTest.test(hook);
-    HookerStructErrTest.test(hook);
-    ClassInfer.test(hook);
-    ApiTest.test(hook);
-    TargetHookTest.main(hook);
-    MethodDefTest.test(hook);
-    HookWayTest.test();
-    SearchSubClassTest.test();
-    try {
-      ActivityHook.test(hook);
+  private static void runSteps(boolean hook) throws Exception {
+    TestRunner.run("PrimCoarseMatch", () -> PrimCoarseMatch.test(hook));
+    TestRunner.run("ActivityHook", () -> ActivityHook.test(hook));
+    TestRunner.run("NativeHookTest", NativeHookTest::test);
+    TestRunner.run("StalkerTest", StalkerTest::test);
+    TestRunner.run("DynamicHookTest", DynamicHookTest::test);
+    TestRunner.run("InsHookTest", InsHookTest::test);
+    TestRunner.run("AppVersionTest", AppVersionTest::test);
+    TestRunner.run("HookWayTest", HookWayTest::test);
+    TestRunner.run("HookTriggerTest", HookTriggerTest::test);
+    TestRunner.run("SafeToStringTest", SafeToStringTest::test);
+    TestRunner.run("HookChainTest2", HookChainTest2::test);
+    TestRunner.run("AotHookChainTest", () -> {
+      Albatross.decompileMethod(AotHookChainTest.class.getDeclaredMethod("test"), true);
+      AotHookChainTest.test();
+    });
+    TestRunner.run("HookChainTest", HookChainTest::test);
+    TestRunner.run("SearchFieldTest", SearchFieldTest::test);
+    TestRunner.run("SearchCallerTest", SearchCallerTest::test);
+    TestRunner.run("SearchObjectTest", SearchObjectTest::test);
+    TestRunner.run("UnHookTest2", UnHookTest2::test);
+    TestRunner.run("UnHookTest", UnHookTest::test);
+    TestRunner.run("ExtendImplTest", ExtendImplTest::test);
+    TestRunner.run("BinderHook", () -> BinderHook.test(hook));
+    TestRunner.run("FieldRefTest", () -> FieldRefTest.test(hook));
+    TestRunner.run("DisableMethodTest", () -> DisableMethodTest.test(hook));
+    TestRunner.run("RequiredTest", () -> RequiredTest.test(hook));
+    TestRunner.run("HookerStructErrTest", () -> HookerStructErrTest.test(hook));
+    TestRunner.run("ClassInfer", () -> ClassInfer.test(hook));
+    TestRunner.run("ApiTest", () -> ApiTest.test(hook));
+    TestRunner.run("TargetHookTest", TargetHookTest::test);
+    TestRunner.run("MethodDefTest", () -> MethodDefTest.test(hook));
+    TestRunner.run("transactionAndConstructor", () -> {
       int level = Albatross.transactionBegin();
       assert level == 1;
       assert Albatross.hookClass(TestMainH.class) == Albatross.CLASS_ALREADY_HOOK;
-      boolean canCreate = false;
-      try {
-        new TestMainH();
-        canCreate = true;
-      } catch (Throwable e) {
-      }
-      if (canCreate) {
-        Albatross.log("it should can not create hooker");
-      } else {
-        Albatross.log("Work OK!Can not create hooker");
-      }
+        boolean canCreate = false;
+        try {
+          new TestMainH();
+          canCreate = true;
+        } catch (Throwable e) {
+        }
+        if (canCreate) {
+          Albatross.log("it should can not create hooker");
+        } else {
+          Albatross.log("Work OK!Can not create hooker");
+        }
       level = Albatross.transactionEnd(true);
       assert level == 0;
       Constructor<TestMain> declaredConstructor = TestMain.class.getDeclaredConstructor(int.class, int.class);
@@ -191,10 +194,11 @@ public class TestMain {
       } else {
         Albatross.log("test TestMain constructor ok");
       }
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
-    if (Albatross.isFieldEnable()) {
+    });
+    TestRunner.run("fieldTests", () -> {
+      if (!Albatross.isFieldEnable()) {
+        throw TestRunner.skip("字段 hook 未启用(FLAG_FIELD_INVALID)");
+      }
       Albatross.log("try field test");
       FieldTest.test(hook);
       staticFieldTest();
@@ -210,8 +214,13 @@ public class TestMain {
         assert b3h_backup_v == 2;
       }
       staticFieldTest2(hook);
-    }
-    testMainTest();
+    });
+    TestRunner.run("testMainTest", TestMain::testMainTest);
+    TestRunner.run("backupAndHook", () -> backupHookChecks(hook));
+  }
+
+  /** backup/hook 组合与还原行为; 第二阶段在 unhook 后复验。 */
+  private static void backupHookChecks(boolean hook) throws Exception {
     Albatross.backupAndHook(TestMain.class.getDeclaredMethod("testIntReturn"), TestMain.class.getDeclaredMethod("testReturnHook"), TestMain.class.getDeclaredMethod("testBackup"));
     Albatross.backupAndHook(PrintStream.class.getDeclaredMethod("println", String.class), TestMain.class.getDeclaredMethod("printlnHook", PrintStream.class, String.class), TestMain.class.getMethod("printlnBackup", PrintStream.class, String.class));
     Albatross.backup(A.class.getDeclaredMethod("a"), TestMain.class.getDeclaredMethod("aBackup", A.class));
@@ -232,6 +241,14 @@ public class TestMain {
     } catch (Exception e) {
       System.out.println("[y] testIntReturn2:");
     }
+  }
+
+
+  public static void main(boolean hook) throws Exception {
+    if (Debug.isDebuggerConnected()) {
+      System.out.println("debugger isDebuggerConnected");
+    }
+    TestRunner.run(hook ? "hooked" : "unhooked", () -> runSteps(hook));
   }
 
   public static void testMainTest() throws NoSuchMethodException, AlbatrossException {

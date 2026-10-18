@@ -549,6 +549,17 @@ public final class Albatross {
       if (!checkTargetClass(dependencies, type, targetType))
         throw FieldException.create(backup, target, FieldExceptionReason.WRONG_TYPE);
     }
+    if (isStatic && Build.VERSION.SDK_INT >= 37) {
+      try {
+        target.setAccessible(true);
+        backup.setAccessible(true);
+        Object v = target.get(null);
+        backup.set(null, v);
+        return true;
+      } catch (IllegalAccessException e) {
+        return false;
+      }
+    }
     int result = backupFieldNative(target, backup);
     if (result == HookResult.HOOK_SUCCESS)
       return true;
@@ -559,9 +570,9 @@ public final class Albatross {
     return false;
   }
 
-  static native long hookMethodNative(Member member, Object callback, int returnTYpe, int paramCount);
+  static native long hookMethodNative(Member member, Object dispatcher, byte[] kinds, int returnType, int argOffset);
 
-  static native void unHookMethodNative(long callbackId);
+  static native void unHookMethodNative(long recordId);
 
   private synchronized static native int unhookNative(Member target, Method hook, Method backup);
 
@@ -634,15 +645,75 @@ public final class Albatross {
     return false;
   }
 
-  public static MethodCallHook hookMethod(Member member, MethodCallback callback, int compile) {
+  // 动态 hook 句柄缓存：同一方法只装一个 trampoline，多次 hook 聚合回调链
+  private static final java.util.Map<Member, MethodCallHook> dynHookHandles =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
+  /** 句柄卸载后从缓存表移除（由 MethodCallHook.unHook 回调）。 */
+  static void onDynHookRemoved(MethodCallHook handle) {
+    dynHookHandles.remove(handle.member, handle);
+  }
+
+  /**
+   * 免签名动态 hook：对任意 {@link Method} 生效，回调通过 {@link MethodHookCallback} 的
+   * beforeCall/afterCall 两段式完成，参数经 {@link qing.albatross.core.CallFrame} 读写，
+   * 原方法可由框架自动执行或回调内 {@link CallFrame#invokeOriginal()} 主动调用（纯原始实现，
+   * 不穿其它 hook 层）。返回句柄用于 {@link MethodCallHook#unHook()}；hook 失败返回 null。
+   *
+   * <p>同一方法多次 hook：native 仅安装一个 trampoline，解析只做一份，
+   * 回调链聚合在返回的同一句柄上（before 正序、after 逆序）；重复传同一实例只生效一次。
+   */
+  public static MethodCallHook hookMethod(Member member, MethodHookCallback hook) {
+    if (member == null || hook == null)
+      throw new NullPointerException();
+    if (Modifier.isStatic(member.getModifiers())) {
+      ensureClassInitializedForVisibly(member.getDeclaringClass());
+    }
+    MethodCallHook existing = dynHookHandles.get(member);
+    if (existing != null) {
+      try {
+        existing.addHook(hook);
+        return existing;
+      } catch (IllegalStateException ignore) {
+        // 与 unHook 竞态：句柄刚被并发卸载（map 移除是 check-act 间发生），
+        // 落到下方重新安装
+      }
+    }
+    if (member instanceof Method) {
+      try {
+        ((Method) member).setAccessible(true);
+      } catch (Throwable ignore) {
+      }
+    }
     MethodCallHook listener = new MethodCallHook(member);
-    ReturnType returnType = listener.returnType;
-    long listenerId = hookMethodNative(member, listener, returnType.value, listener.parameterTypes.length + listener.argOffset);
-    if (listenerId > 4096 || listenerId < 0) {
+    Class<?>[] types = listener.parameterTypes;
+    byte[] kinds = new byte[types.length];
+    for (int i = 0; i < types.length; i++) {
+      kinds[i] = MethodCallHook.kindOf(types[i]);
+    }
+    Albatross.transactionBegin();
+    long listenerId;
+    try {
+      listenerId = hookMethodNative(member, listener, kinds, listener.returnType.value,
+          listener.argOffset);
+    } finally {
+      Albatross.transactionEnd(true);
+    }
+    if (listenerId != 0) {
       listener.listenerId = listenerId;
-      listener.callback = callback;
-      if (compile != DO_NOTHING) {
-        compileClass(callback.getClass(), compile);
+      listener.addHook(hook);
+      MethodCallHook prev = dynHookHandles.putIfAbsent(member, listener);
+      if (prev != null) {
+        // 并发竞争：另一线程先装好 trampoline，丢弃自己的，复用已有句柄
+        listener.unHook();
+        prev.addHook(hook);
+        return prev;
+      }
+      if (inline_max_code_units > 0) {
+        int methodCodeSize = getMethodCodeSize(member);
+        if (methodCodeSize != 0 && methodCodeSize < inline_max_code_units) {
+          preventMethodInlining(member);
+        }
       }
       return listener;
     }
@@ -906,7 +977,9 @@ public final class Albatross {
         if ((flags & FLAG_LOADER_FROM_CALLER) != 0) {
           loaderFromCaller = true;
         }
-        toVisitedClass = new HashSet<>();
+        // 并发集合：addToVisit 可能在任意线程（ReflectUtils/automator）被调用，
+        // 与 transactionEnd 的 clear 并发时普通 HashSet 会损坏
+        toVisitedClass = java.util.concurrent.ConcurrentHashMap.newKeySet();
         initField();
         if (hookClassInternal($Image.class, Albatross.class.getClassLoader(), Albatross.class, null) == 0) {
           Albatross.log("should keep annotation info:" + $Image.class.getDeclaredField("ensureClassInitialized").getAnnotation(ByName.class)
@@ -935,9 +1008,11 @@ public final class Albatross {
             hookClassInternal(BaseDexClassLoaderH.class, BaseDexClassLoader.class.getClassLoader(), BaseDexClassLoader.class, null);
           }
           ensureClassInitialized(MethodStubs.class);
+          ensureClassInitialized(DynMethodStubs.class);
           registerMethodNative(ensureClassInitialized, $Image.onClassInit.method,
               $Image.appendLoader.method, $Image.checkMethodReturn.method, InstructionListenerH.onEnter.method,
-              InstructionListenerH.onReturn.method, InstructionListenerH.onReturnPrim.method, MethodStubs.class);
+              InstructionListenerH.onReturn.method, InstructionListenerH.onReturnPrim.method, MethodStubs.class,
+              DynMethodStubs.class);
           registerSearchCallback(SearchCallback.class.getDeclaredMethod("match", Object.class, int.class),
               FieldCallback.class.getDeclaredMethod("match", Member.class, int.class, int.class),
               SearchClassCallback.class.getDeclaredMethod("match", Class.class, long.class));
@@ -997,16 +1072,14 @@ public final class Albatross {
           }
           pendingMap = new HashMap<>();
           initClassLoader();
-          Albatross.hookClassInternal(MethodCallHook.Image.class, MethodCallHook.class.getClassLoader(), MethodCallHook.class, null);
           Albatross.hookClassInternal(ActivityThreadH.class, ActivityThread.getClassLoader(), ActivityThread, null);
         } finally {
           //must init there
-          toDecompileMethod = new HashSet<>();
+          // 并发集合：hook 安装路径（preventMethodInlining → addDecompileMethod）
+          // 在事务外往里加，transactionEnd 遍历期间集合不是静止的
+          toDecompileMethod = java.util.concurrent.ConcurrentHashMap.newKeySet();
           transactionEnd(true);
         }
-        registerHookCallback(new Method[]{MethodCallHook.Image.callVoid.method, MethodCallHook.Image.callBool.method, MethodCallHook.Image.callChar.method, MethodCallHook.Image.callByte.method,
-            MethodCallHook.Image.callShort.method, MethodCallHook.Image.callInt.method, MethodCallHook.Image.callFloat.method, MethodCallHook.Image.callLong.method,
-            MethodCallHook.Image.callDouble.method, MethodCallHook.Image.callObject.method});
 //        SafeToString.safeToString(null);
 //        compileClass(SafeToString.class, NATIVE_CODE);
         compileClassByAnnotation(Albatross.class, DO_NOTHING);
@@ -2938,10 +3011,15 @@ public final class Albatross {
     if ((ret = transactionEndNative(doTask, suspendVM)) == 0) {
       toVisitedClass.clear();
       if (!toDecompileMethod.isEmpty()) {
+        // 逐项摘除再处理：并发 hook 线程会在事务外往集合里加（hookMethod →
+        // preventMethodInlining → addDecompileMethod），遍历期间集合不是静止的。
+        // 旧实现直接 for-each + clear()：一边遍历一边被并发 add 会抛
+        // ConcurrentModificationException；clear() 还会把并发新增的条目丢掉
+        // （丢了就漏 decompile，hook 会被调用点的内联副本绕过）。
         for (Member method : toDecompileMethod) {
-          decompileMethod(method, false);
+          if (toDecompileMethod.remove(method))
+            decompileMethod(method, false);
         }
-        toDecompileMethod.clear();
       }
     }
     return ret;
@@ -2960,7 +3038,7 @@ public final class Albatross {
 
   //---------------------------------
 
-  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter, Method onExit, Method onExitPrim, Class<?> stubClass);
+  private static native void registerMethodNative(Method ensureClassInitialized, Method onClassInit, Method appendLoaderMethod, Method compileCheck, Method onEnter, Method onExit, Method onExitPrim, Class<?> stubClass, Class<?> dynStubClass);
 
   private static native void registerSearchCallback(Method searchCallback, Method fieldCallback, Method classCallback);
 
@@ -3224,16 +3302,21 @@ public final class Albatross {
       if (parentClassLoader == null && !(loader instanceof BaseDexClassLoader))
         return false;
       classLoaderList.add(loader);
-      if (toDecompileMethod != null)
-        Albatross.getMainHandler().postDelayed(() -> {
-          String loaderName;
-          try {
-            loaderName = loader.toString();
-          } catch (Exception e) {
-            loaderName = loader.getClass().getName();
-          }
-          Albatross.log("new classLoader append:" + loaderName);
-        }, 5000);
+      if (toDecompileMethod != null) {
+        // 没有主线程 handler（无 ActivityThread 的进程）时不做这条延迟日志：
+        // 直接 getMainHandler() 会 NPE，而 NPE 会从 ClassLoader 构造器里抛出去
+        Handler handler = mainHandlerOrNull();
+        if (handler != null)
+          handler.postDelayed(() -> {
+            String loaderName;
+            try {
+              loaderName = loader.toString();
+            } catch (Exception e) {
+              loaderName = loader.getClass().getName();
+            }
+            Albatross.log("new classLoader append:" + loaderName);
+          }, 5000);
+      }
     }
     return true;
   }
@@ -3302,6 +3385,16 @@ public final class Albatross {
 
   public static Handler getMainHandler() {
     return ActivityThreadH.currentActivityThread().getHandler();
+  }
+
+  /**
+   * 没有 ActivityThread 的进程（load_jvm 之后的纯原生进程、无 Activity 的宿主）里
+   * currentActivityThread() 是 null，getMainHandler() 会直接 NPE。这里按"没有主线程
+   * handler"返回 null，调用方自行降级（延迟回调跳过或立即执行）。
+   */
+  public static Handler mainHandlerOrNull() {
+    ActivityThreadH activityThread = ActivityThreadH.currentActivityThread();
+    return activityThread != null ? activityThread.getHandler() : null;
   }
 
   public static String getProfileFilePath() {

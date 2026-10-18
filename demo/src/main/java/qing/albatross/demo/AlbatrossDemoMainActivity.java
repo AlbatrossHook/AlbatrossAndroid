@@ -5,9 +5,15 @@ import static qing.albatross.demo.TestMain.testGc;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Debug;
+import android.os.Looper;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
@@ -18,6 +24,8 @@ import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayDeque;
+import java.util.List;
 
 import qing.albatross.annotation.ExecutionOption;
 import qing.albatross.common.AppMetaInfo;
@@ -31,6 +39,84 @@ import qing.albatross.server.UnixRpcServer;
 
 
 public class AlbatrossDemoMainActivity extends Activity {
+
+
+  private static final String TAG = "AlbatrossDemo";
+  private static final String DEMO_PACKAGE = "qing.albatross.demo";
+  private static final String ACTION_RUN_TEST = DEMO_PACKAGE + ".RUN_TEST";
+  private static final String EXTRA_CLASS = "class";
+  private static final String EXTRA_BACKGROUND = "background";
+
+  /** 界面滚动日志保留的行数。 */
+  private static final int UI_LOG_LINES = 12;
+
+
+  private final ArrayDeque<String> uiLog = new ArrayDeque<>();
+
+  private final BroadcastReceiver runTestReceiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      if (ACTION_RUN_TEST.equals(intent.getAction())) {
+        handleRunTest(intent);
+      }
+    }
+  };
+
+  private boolean runTestReceiverRegistered;
+  @Override
+  protected void onDestroy() {
+    TestRunner.setProgressListener(null);
+    if (runTestReceiverRegistered) {
+      unregisterReceiver(runTestReceiver);
+      runTestReceiverRegistered = false;
+    }
+    super.onDestroy();
+  }
+
+  private void handleRunTest(Intent intent) {
+    String requestedClassName = intent.getStringExtra(EXTRA_CLASS);
+    boolean background = intent.getBooleanExtra(EXTRA_BACKGROUND, false);
+    /* 可选 stage extra：透传给探针类（MethodBindRaceTest 等），未带则保持默认（skip）。 */
+    TestRunner.stageOverride = intent.getIntExtra("stage", -1);
+    String displayName = requestedClassName == null ? "<missing>" : requestedClassName;
+    reportTestStatus("RUN_TEST start: class=" + displayName + ", background=" + background, null);
+
+    try {
+      initAlbatross();
+      List<String> classNames = TestSuiteRunner.expandTestClasses(requestedClassName, getClassLoader());
+      StringBuilder joined = new StringBuilder();
+      for (String className : classNames) {
+        if (joined.length() > 0)
+          joined.append(',');
+        joined.append(className);
+      }
+      reportTestStatus("RUN_TEST list: " + joined, null);
+      /* 执行与上报在 TestSuiteRunner 里，与原生宿主(albatross_test --java)同一份实现。 */
+      Runnable invocation = () -> TestSuiteRunner.runAll(classNames, getClassLoader());
+      if (background) {
+        new Thread(invocation, "AlbatrossDemoTest").start();
+      } else {
+        invocation.run();
+      }
+    } catch (Throwable error) {
+      reportTestFailure(displayName, error);
+    }
+  }
+
+  private void reportTestFailure(String className, Throwable error) {
+    reportTestStatus("RUN_TEST failed: " + className + ": " + error, error);
+  }
+
+  private void reportTestStatus(String status, Throwable error) {
+    if (error == null) {
+      Log.i(TAG, status);
+    } else {
+      Log.e(TAG, status, error);
+    }
+    appendUiLog(status);
+  }
+
+
 
   static boolean isLoad = false;
   protected TextView textView;
@@ -47,7 +133,51 @@ public class AlbatrossDemoMainActivity extends Activity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     fixLayout();
+    registerRunTestReceiver();
+    TestRunner.setProgressListener(this::appendUiLog);
   }
+
+  private void registerRunTestReceiver() {
+    IntentFilter filter = new IntentFilter(ACTION_RUN_TEST);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(runTestReceiver, filter, Context.RECEIVER_EXPORTED);
+    } else {
+      registerReceiver(runTestReceiver, filter);
+    }
+    runTestReceiverRegistered = true;
+  }
+
+  /**
+   * 界面滚动日志: 顶部是当前进度快照, 下面按"最新在前"显示最近若干行。
+   * 视图只有几行高, 倒序保证当前用例始终可见(TextView 不会自动滚到底)。
+   */
+  private void appendUiLog(String line) {
+    Runnable update = () -> {
+      if (textView == null) {
+        return;
+      }
+      uiLog.addLast(line);
+      while (uiLog.size() > UI_LOG_LINES) {
+        uiLog.removeFirst();
+      }
+      StringBuilder text = new StringBuilder();
+      String snapshot = TestRunner.snapshot();
+      if (!snapshot.isEmpty()) {
+        text.append(snapshot).append('\n');
+      }
+      java.util.Iterator<String> newestFirst = uiLog.descendingIterator();
+      while (newestFirst.hasNext()) {
+        text.append(newestFirst.next()).append('\n');
+      }
+      textView.setText(text);
+    };
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+      update.run();
+    } else if (textView != null) {
+      textView.post(update);
+    }
+  }
+
 
   private static native String registerAlbatrossLib(Class<?> albatross, int version);
 

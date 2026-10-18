@@ -43,4 +43,5 @@ dependencies {
     implementation(project(":annotation"))
     implementation(project(":core"))
     implementation(project(":demo"))
+    implementation(project(":ocean"))
 }

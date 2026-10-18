@@ -41,4 +41,5 @@ dependencies {
     compileOnly(project(":annotation"))
     compileOnly(project(":core"))
     implementation(project(":server"))
+    implementation(project(":ocean"))
 }

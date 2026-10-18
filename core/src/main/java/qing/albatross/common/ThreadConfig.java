@@ -15,6 +15,7 @@
  */
 package qing.albatross.common;
 
+import android.os.Handler;
 import android.util.ArraySet;
 
 import java.util.Set;
@@ -56,9 +57,15 @@ public class ThreadConfig {
   public static void notifyLeave() {
     int tid = Albatross.getTid();
     if (notTraceThreads.contains(tid)) {
-      Albatross.getMainHandler().postDelayed(() -> {
+      // 没有 ActivityThread 的进程里没有主线程 handler，降级为立即摘除
+      // （直接 getMainHandler() 会 NPE）
+      Handler handler = Albatross.mainHandlerOrNull();
+      if (handler != null)
+        handler.postDelayed(() -> {
+          notTraceThreads.remove(tid);
+        }, 1000);
+      else
         notTraceThreads.remove(tid);
-      }, 1000);
     }
     threadBuilder.remove();
     threadInfo.remove();

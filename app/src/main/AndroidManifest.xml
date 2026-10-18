@@ -22,6 +22,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".demo.SecondActivity"/>
+        <activity android:name="albatross.demo.OceanDemoActivity"/>
     </application>
 
 </manifest>

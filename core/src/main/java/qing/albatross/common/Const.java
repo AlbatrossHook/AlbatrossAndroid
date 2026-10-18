@@ -28,4 +28,5 @@ public class Const {
   public static final byte ARG_DOUBLE = 'D';
   public static final byte ARG_CHAR = 'C';
   public static final byte ARG_BYTES = 'b';
+  public static final byte ARG_PTR = 'p';
 }
