@@ -13,7 +13,7 @@ extern "C" {
 #else
 #define API __attribute__((visibility("default")))
 #endif
-#define ALBATROSS_VERSION 6
+#define ALBATROSS_VERSION 7
 
 API int AlbatrossGetVersion();
 

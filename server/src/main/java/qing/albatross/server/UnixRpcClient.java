@@ -112,7 +112,13 @@ public class UnixRpcClient extends Thread {
         String rpcMethodName = rpcMethod.getName();
         Method targetMethod = ReflectUtils.findMethod(owner.getClass(), method.getName(), method.getParameterTypes());
         if (method.getAnnotation(Broadcast.class) == null) {
-          registerClientMethod(serverObj, rpcMethodName, targetMethod, rpcMethod.args, rpcMethod.ret);
+          byte cmd = registerClientMethod(serverObj, rpcMethodName, targetMethod, rpcMethod.args, rpcMethod.ret);
+          if (cmd == 0) {
+            // 服务端 API 列表里没有这个方法（常见原因：MSG_APIS 响应被截断、客户端/服务端版本不匹配）。
+            // native 方法不会被替换成 RPC stub，一调用就是 UnsatisfiedLinkError，而调用方经常
+            // catch 掉只留一行堆栈。这里留下稳定判据，测试脚本按 "rpc method missing on server" 断言。
+            Albatross.log("rpc method missing on server: " + apiInterface.getName() + "." + rpcMethodName);
+          }
         } else {
           if (Modifier.isNative(targetMethod.getModifiers())) {
             throw new RuntimeException("rpc broadcast method " + rpcMethodName + " should not be native");
